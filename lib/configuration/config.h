@@ -52,13 +52,14 @@ typedef enum {
 } T_SOCKIO;
 
 struct io_params {
+	pthread_t		tid;
         T_DATA			io_drn;
         T_IO			desc_type;
 	int			io_fd;
 	pthread_mutex_t		listlock;
 	pthread_cond_t		readable;
 	int			*listready;
-	int			ioblock;
+	int			nonblock;
 	struct rbuf_entry	*rbuf_p;
         char			*path;
         struct	sock_param	*sock_data;	/* MAY BE NULL */

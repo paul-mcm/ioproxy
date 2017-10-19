@@ -93,7 +93,7 @@ int set_flags(struct io_params *iop)
 	else	
 		f = O_WRONLY;
 
-	if (iop->ioblock == FALSE)
+	if (iop->nonblock == TRUE)
 		f |= O_NONBLOCK;
 
 	return f;

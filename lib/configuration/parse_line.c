@@ -105,8 +105,8 @@ int fill(char *f, char *v, struct io_params *i)
 		err = set_conn(v, i);
 	} else if (strcasecmp((f + 4), "proto") == 0 ) {
 		err = set_sockio(v, i);
-	} else if (strcasecmp((f + 4), "ioblock") == 0) {
-		err = set_ioblock(v, i);
+	} else if (strcasecmp((f + 4), "nonblock") == 0) {
+		err = set_nonblock(v, i);
  	} else if (strcasecmp((f + 4), "port") == 0 ) {
 		i->sock_data->port = atoi(v);
 	} else {
@@ -117,12 +117,12 @@ int fill(char *f, char *v, struct io_params *i)
 	return(err);
 }
 
-int set_ioblock(char *t, struct io_params *iop)
+int set_nonblock(char *t, struct io_params *iop)
 {
 	if (strcasecmp(t, "TRUE") == 0)
-		iop->ioblock = TRUE;
+		iop->nonblock = TRUE;
 	else if (strcasecmp(t, "FALSE") == 0)
-		iop->ioblock = FALSE;
+		iop->nonblock = FALSE;
 	else
 		return (-1);
 

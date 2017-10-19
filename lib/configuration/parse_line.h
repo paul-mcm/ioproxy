@@ -35,7 +35,7 @@ int fill(char *, char *, struct io_params *);
 int set_conn(char *, struct io_params *);
 int set_sockio(char *, struct io_params *);
 int set_desc_t(char *, struct io_params *);
-
+int set_nonblock(char *, struct io_params *iop);
 int parse_tuple(char *, char *);
 
 char * rm_space(char *);

@@ -5,33 +5,28 @@ int debug = 1;
 void *iocfg_manager(void *);
 void *io_thread(void *);
 
-
 int main(int argc, char *argv[])
 {
 	int	r;
 	pthread_t tid;
 	struct io_cfg *cfg;
 	LIST_INIT(&all_cfg);
-	printf("From main()\n");
 	read_config(&all_cfg);
 
 	/* ITERATE OVER EACH CFG IN all_cfg AND 
 	 * START CONTROL THREAD.
 	*/
 	pthread_attr_t dflt_attrs;
-        if ((r = pthread_attr_init(&dflt_attrs)) != 0) {
-            printf("Error initing thread attrs: %d\n", r);
-	    exit(-1);
-	}
+        if ((r = pthread_attr_init(&dflt_attrs)) != 0)
+            log_die("Error initing thread attrs: %d\n", r);
 
-	LIST_FOREACH(cfg, &all_cfg, io_cfgs) {
-		show_config(cfg);
-	}
-
-	LIST_FOREACH(cfg, &all_cfg, io_cfgs) {
+/*	LIST_FOREACH(cfg, &all_cfg, io_cfgs)
+*		show_config(cfg);
+*/
+	LIST_FOREACH(cfg, &all_cfg, io_cfgs)
 		if (pthread_create(&tid, &dflt_attrs, iocfg_manager, (void *)cfg) != 0)
                 	printf("error pthread_create: %s", strerror(errno));
-	}
+
 	sleep(120);
 	printf("Returning from main()\n");
 }
@@ -40,28 +35,30 @@ void *iocfg_manager(void *arg)
 {
 	pthread_t		tid;
 	struct io_cfg		*icfg;
-	struct io_params	*iop, *ioptr;
+	struct io_params	*iop;
+	pthread_mutexattr_t	mxattrs;
 	pthread_attr_t		dflt_attrs;
 
 	icfg = (struct io_cfg *)arg;
-	iop = icfg->io_p;
+	pthread_mutexattr_init(&mxattrs);
+	icfg->io_p->listlock = PTHREAD_MUTEX_INITIALIZER;
 
         if (pthread_attr_init(&dflt_attrs) != 0)
 		log_die("Error initing thread attrs\n");
 
-	iop->rbuf_p = new_rbuf(iop->listlock);  /* MUST BE FREED */
+	icfg->io_p->rbuf_p = new_rbuf();  /* MUST BE FREED */
 
-	if (pthread_create(&tid, &dflt_attrs, io_thread, (void *)iop) != 0)
+	if (pthread_create(&icfg->io_p->tid, &dflt_attrs, io_thread, (void *)icfg->io_p) != 0)
 		printf("pthread_create error: %s\n", strerror(errno));
 	
-	if (!is_netsock(iop))
-		validate_path(iop);
+/*	if (!is_netsock(icfg->io_p))
+*		validate_path(icfg->io_p);
+*/
+	LIST_FOREACH(iop, &icfg->io_paths, io_entries)
+		iop->rbuf_p = icfg->io_p->rbuf_p;
 
-	LIST_FOREACH(ioptr, &icfg->io_paths, io_entries)
-		ioptr->rbuf_p = iop->rbuf_p;
-
-	LIST_FOREACH(ioptr, &icfg->io_paths, io_entries) {
-		if (pthread_create(&tid, &dflt_attrs, io_thread, (void *)ioptr) != 0)
+	LIST_FOREACH(iop, &icfg->io_paths, io_entries) {
+		if (pthread_create(&iop->tid, &dflt_attrs, io_thread, (void *)iop) != 0)
                 	printf("error pthread_create: %s", strerror(errno));
 	}
 }
@@ -100,9 +97,13 @@ void *io_thread(void *arg)
 			r = rbuf_writeto(iop);
 		else
 			r = rbuf_readfrom(iop);
-	}
 
+		if (r < 0)
+			break;
+	}
+	free_rbuf(iop->rbuf_p);
 	printf("io_thread returning\n");
+/*	pthread_exit(void); */
 }
 
 int validate_path(struct io_params *iop)

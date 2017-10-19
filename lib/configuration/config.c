@@ -240,7 +240,7 @@ void print_config_params(struct io_params *i)
 	printf("readable addr: %p\n", i->readable);
 	printf("listlock addr: %p\n", i->listlock);
 	printf("listready addr: %p\n", i->listready);
-	printf("ioblock: %d\n", i->ioblock);
+	printf("nonblock: %d\n", i->nonblock);
 
 	if (is_sock(i)) {
 		printf("conn_type: %s\n", 	conn_type[i->sock_data->conn_type]);

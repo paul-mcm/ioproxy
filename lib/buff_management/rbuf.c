@@ -93,20 +93,19 @@ int rbuf_readfrom(struct io_params *iop)
         }       
 }
 
-struct rbuf_entry *new_rbuf(pthread_mutex_t *lock)
+struct rbuf_entry *new_rbuf(void)
 {
 	int i;
 	struct rbuf_entry *e, *prev_ptr, *head;
 	pthread_mutexattr_t attrs;
 
 	prev_ptr = NULL;
-
-        lock = PTHREAD_MUTEX_INITIALIZER;
         pthread_mutexattr_init(&attrs);
 
 	/* INITIALIZE LIST OF BUFFERS */
 	for (i = 64; i >= 1; i--) {
-	    e = malloc(sizeof(struct rbuf_entry));
+	    if ((e = malloc(sizeof(struct rbuf_entry))) == NULL)
+		log_syserr("rbuf malloc error");
 
 	    e->id = i;
 	    e->iov[0].iov_len = BUFF_SIZE;
@@ -118,10 +117,25 @@ struct rbuf_entry *new_rbuf(pthread_mutex_t *lock)
 	    } else {
 		head = e;
 	    }
-
 	    prev_ptr = e;
 	}
 	e->next = head;
+
+	struct rbuf_entry *rb;
+	rb = head;
 	return head;
 }
 
+void free_rbuf(struct rbuf_entry *rbuf)
+{
+	int i;
+	struct rbuf_entry *rb, *rb_nxt;
+	rb = rbuf;
+
+	/* FREE LIST OF BUFFERS */
+	for (i = 1; i < 65; i++) {
+	    rb_nxt = rb->next;
+	    free(rb);
+	    rb = rb_nxt;
+	}
+}

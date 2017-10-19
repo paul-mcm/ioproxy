@@ -36,6 +36,6 @@ struct rbuf_entry {
 int rbuf_readfrom(struct io_params *);
 int rbuf_writeto(struct io_params *);
 void read_cleanup(void *);
-struct rbuf_entry *rbuf_new(pthread_mutex_t *);
-
+struct rbuf_entry *rbuf_new(void);
+void free_rbuf(struct rbuf_entry *);
 #endif
