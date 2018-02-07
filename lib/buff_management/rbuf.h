@@ -40,10 +40,9 @@
 
 struct rbuf_entry *new_rbuf();
 
-struct rbuf_entry {
+struct rbuf_entry { 
 	int			id;
-	int			cnt;	/* byte count of last readv/writev */
-        char			line[BUFF_SIZE];
+        char			line[RBUFF_SIZE];
 	int			len;
         pthread_mutex_t		mtx_lock;
         pthread_rwlock_t	rw_lock;
@@ -51,9 +50,12 @@ struct rbuf_entry {
 };
 
 int rbuf_rwlock_readfrom(struct io_params *);
+int rbuf_rwlock_readfrom2(struct io_params *);
 int rbuf_rwlock_writeto(struct io_params *);
 
 int rbuf_mtx_readfrom(struct io_params *);
+int rbuf_mtx_readfrom2(struct io_params *);
+
 int rbuf_mtx_writeto(struct io_params *);
 int rbuf_t3_readfrom(struct io_params *);
 

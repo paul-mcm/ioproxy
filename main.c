@@ -143,7 +143,6 @@ void iop_setup(struct io_cfg *iocfg)
 		newiop1->iop->io_thread = io_t3_thread;
 
 		newiop1->iop->rbuf_p 	= newiop0->iop->rbuf_p;
-		printf("Pair: newiop0: %p newiop1 %p\n", newiop0->iop->rbuf_p, newiop1->iop->rbuf_p);
 
 		newiop1->iop->listready	= newiop0->iop->listready;
 		newiop1->iop->listlock 	= newiop0->iop->listlock;
