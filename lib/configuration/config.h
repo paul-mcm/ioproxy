@@ -1,4 +1,4 @@
-/* Copyright (c) 2017 Paul McMath <paulm@tetrardus.net>
+/* Copyright (c) 2017-2018 Paul McMath <paulm@tetrardus.net>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -98,10 +98,10 @@ struct io_params {
 	void *(*io_thread)(void *);
 
 	pthread_t		tid;
+
 	pthread_mutex_t		listlock;	/* s */
 	pthread_cond_t		readable;	/* s */
 	pthread_mutex_t		*fd_lock;	/* s */
-	pthread_cond_t		opened;		/* s */
 	int			io_fd;
 	int			*iofd_p;		/* TYPE 3 ONLY */
         char			*path;

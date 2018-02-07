@@ -1,4 +1,4 @@
-/* Copyright (c) 2017 Paul McMath <paulm@tetrardus.net>
+/* Copyright (c) 2017-2018 Paul McMath <paulm@tetrardus.net>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -82,13 +82,14 @@ void iop_setup(struct io_cfg *iocfg)
 
 	if (iocfg->io_type == TYPE_1 || iocfg->io_type == TYPE_2) {
 
+	    /* AT THIS STAGE, iop0_paths HAS ONLY 1 MEMBER */
 	    iop0 = LIST_FIRST(&iocfg->iop0_paths);
 	    iop = iop0->iop;
 
 	    pthread_cond_init(&iop->readable, NULL);
 	    iop0->iop->listlock = PTHREAD_MUTEX_INITIALIZER;
 
-	    iop0->iop->rbuf_p = new_rbuf(iocfg);
+	    iop0->iop->rbuf_p = new_rbuf(iocfg->io_type);
 	    iop0->iop->listready = malloc(sizeof(int));
 	    *iop0->iop->listready = 0;
 
@@ -105,7 +106,6 @@ void iop_setup(struct io_cfg *iocfg)
 		iop0->iop->rbuf_writeto = rbuf_mtx_writeto;
 		LIST_FOREACH(iop1, &iop0->io_paths, io_paths)
 			iop1->iop->rbuf_readfrom = rbuf_mtx_readfrom;
-
 	    } else if (iocfg->io_type == TYPE_2) {
 		iop0->iop->rbuf_writeto = rbuf_rwlock_writeto;
 		LIST_FOREACH(iop1, &iop0->io_paths, io_paths)
@@ -113,8 +113,6 @@ void iop_setup(struct io_cfg *iocfg)
 	    }
 
 	} else if (iocfg->io_type == TYPE_3) {
-
-
 	    int i = 0;
 	    /* AT THIS POINT, ONLY ONE ITEM IN LIST */
 	    iop0 = LIST_FIRST(&iocfg->iop0_paths); 
@@ -139,7 +137,7 @@ void iop_setup(struct io_cfg *iocfg)
 		newiop0->iop->listready = malloc(sizeof(int));
 		*newiop0->iop->listready = 0;
 
-		newiop0->iop->rbuf_p = new_rbuf(iocfg);
+		newiop0->iop->rbuf_p = new_rbuf(iocfg->io_type);
 		newiop0->iop->rbuf_writeto = rbuf_mtx_writeto;
 		newiop1->iop->rbuf_readfrom = rbuf_t3_readfrom;
 		newiop1->iop->io_thread = io_t3_thread;

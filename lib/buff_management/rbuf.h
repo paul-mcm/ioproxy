@@ -1,4 +1,4 @@
-/* Copyright (c) 2017 Paul McMath <paulm@tetrardus.net>
+/* Copyright (c) 2017-2018 Paul McMath <paulm@tetrardus.net>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -36,7 +36,7 @@
 
 #include "../configuration/config.h"
 
-#define RBUFF_SIZE	512
+#define RBUFF_SIZE 1024
 
 struct rbuf_entry *new_rbuf();
 
@@ -44,12 +44,11 @@ struct rbuf_entry {
 	int			id;
 	int			cnt;	/* byte count of last readv/writev */
         char			line[BUFF_SIZE];
-        struct	iovec 		iov[1];
+	int			len;
         pthread_mutex_t		mtx_lock;
         pthread_rwlock_t	rw_lock;
 	struct	rbuf_entry	*next;
 };
-
 
 int rbuf_rwlock_readfrom(struct io_params *);
 int rbuf_rwlock_writeto(struct io_params *);
@@ -59,6 +58,6 @@ int rbuf_mtx_writeto(struct io_params *);
 int rbuf_t3_readfrom(struct io_params *);
 
 void read_cleanup(void *);
-struct rbuf_entry *rbuf_new(struct io_cfg);
+struct rbuf_entry *new_rbuf(int);
 void free_rbuf(struct rbuf_entry *);
 #endif
