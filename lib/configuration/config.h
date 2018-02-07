@@ -36,10 +36,16 @@
 
 /* #include "../buff_management/rbuf.h" */
 
-#define FALSE 0
-#define TRUE  1
+#define FALSE		0
+#define TRUE		1
 #define BUFF_SIZE	2048
-#define SIZE	256
+#define SIZE		256
+
+typedef enum {
+	TYPE_1,		/* 1-to-1    */
+	TYPE_2,		/* 1-to-many */
+	TYPE_3,		/* many-to-1 */
+} T_IO;
 
 typedef enum {
 	SRC,
@@ -54,7 +60,7 @@ typedef enum {
 	UNIX_SOCK,
 	TCP_SOCK,
 	UDP_SOCK
-} T_IO;
+} T_FD;
 
 typedef enum {
 	CONNECT,
@@ -66,21 +72,6 @@ typedef enum {
 	STREAM = 4,
 } T_SOCKIO;
 
-struct io_params {
-	pthread_t		tid;
-        T_DATA			io_drn;
-        T_IO			desc_type;
-	int			io_fd;
-	pthread_mutex_t		listlock;
-	pthread_cond_t		readable;
-	int			*listready;
-	int			nonblock;
-	struct rbuf_entry	*rbuf_p;
-        char			*path;
-        struct	sock_param	*sock_data;	/* MAY BE NULL */
-        LIST_ENTRY(io_params)	io_entries;
-};
-
 struct sock_param {
         T_SOCK		conn_type;
         T_SOCKIO	sockio;
@@ -90,15 +81,54 @@ struct sock_param {
 	char		*sockpath;
 };
 
-struct io_cfg {
-	struct io_params *io_p;
-	LIST_HEAD(, io_params) io_paths;
-	LIST_ENTRY(io_params) io_entries;
-	LIST_ENTRY(io_cfg) io_cfgs;
+/* s - shared
+ * c - constant (does not change)
+ */
+
+struct io_params {
+        T_DATA			io_drn;
+        T_FD			desc_type;
+	struct iop0_params	*iop0;		/* TYPE 3 ONLY; ELSE NULL */
+
+	struct rbuf_entry	*rbuf_p;
+	int (*rbuf_writeto)(struct io_params *);
+	int (*rbuf_readfrom)(struct io_params *);
+	int (*read_input)(struct io_params *);
+	int (*write_output)(struct io_params *);
+	void *(*io_thread)(void *);
+
+	pthread_t		tid;
+	pthread_mutex_t		listlock;	/* s */
+	pthread_cond_t		readable;	/* s */
+	pthread_mutex_t		*fd_lock;	/* s */
+	pthread_cond_t		opened;		/* s */
+	int			io_fd;
+	int			*iofd_p;		/* TYPE 3 ONLY */
+        char			*path;
+	int			nonblock;
+	int			*listready;	/* s */
+	long			bytes;
+        struct sock_param	*sock_data;	/* MAY BE NULL */
 };
 
-LIST_HEAD(all_cfg_list, io_cfg) all_cfg;
-struct all_cfg_list all_configs;
+struct iop0_params {
+	struct io_params		*iop;
+	LIST_HEAD(, iop1_params)	io_paths;
+	LIST_ENTRY(iop0_params)		iop0_paths;
+};
+
+struct iop1_params {
+	struct io_params	*iop;
+	LIST_ENTRY(iop1_params)	io_paths;
+};
+
+struct io_cfg {
+	T_IO			    io_type;
+	LIST_HEAD(, iop0_params)    iop0_paths;
+	LIST_ENTRY(io_cfg)	    io_cfgs;
+};
+
+LIST_HEAD(all_cfg_list, io_cfg) all_cfg, *all_cfgs;
 
 struct io_cfg * parse_config(FILE *);
 int read_config(struct all_cfg_list *);
@@ -107,7 +137,7 @@ int show_config(struct io_cfg *);
 int show_all_configs(struct all_cfg_list *);
 
 struct io_params * parse_io_cfg(FILE *);
-struct io_params * parse_cfg_stanza(FILE *);
+struct iop0_params * parse_iop0_stanza(FILE *);
 void set_derived_params(struct io_params *);
 void print_params(struct io_params *);
 int fill(char *, char *, struct io_params *);
@@ -118,15 +148,32 @@ int set_desc_t(char *, struct io_params *);
 int set_ioblock(char *, struct io_params *);
 
 int parse_tuple(char *, char *);
-int is_sock(struct io_params *);
-int is_netsock(struct io_params *);
+int is_sock(int);
+int is_netsock(int);
 int is_src(struct io_params *);
 int is_dst(struct io_params *);
 
 int valid_path(char *, struct stat *);  /* VALIDATE PATH */
-int valid_ftype(struct io_params *, struct stat *); /* VALIDATE FILE TYPE */
+int valid_ftype(int, struct stat *); /* VALIDATE FILE TYPE */
 
 void print_config_params(struct io_params *);
+
+void set_io_type(struct io_cfg *);
+T_DATA set_io_dir(char *);
+
+int line_byte_cnt(FILE *);
+
+struct io_cfg *io_cfg_alloc(void);
+struct iop0_params *iop0_alloc(void);
+struct iop1_params *iop1_alloc(void);
+struct io_params *iop_alloc(void);
+struct sock_param *sock_param_alloc(void);
+
+void free_iop0(struct iop0_params *);
+void free_iop1(struct iop1_params *);
+void free_iop(struct io_params *);
+void free_sock_param(struct sock_param *);
+
 
 
 #endif

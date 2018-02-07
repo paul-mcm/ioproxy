@@ -57,6 +57,4 @@ char * rm_space(char *);
 char * clean_line(char *);
 char * rm_end_space(char *);
 
-T_DATA set_io_type(char *);
-
 #endif

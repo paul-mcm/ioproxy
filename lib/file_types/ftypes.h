@@ -32,11 +32,17 @@
 #include <unistd.h>
 
 #include "../configuration/config.h"
+
+int open_desc(struct io_params *);
+
 int open_fifo(struct io_params *);
 int open_file(struct io_params *);
 int open_tcpsock(struct io_params *);
 int open_udpsock(struct io_params *);
+int open_unixsock(struct io_params *);
+
 int set_flags(struct io_params *);
 
 
-int open_local_desc(char *, int);
+
+/* int open_local_desc(char *, int); */

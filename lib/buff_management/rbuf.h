@@ -41,16 +41,24 @@
 struct rbuf_entry *new_rbuf();
 
 struct rbuf_entry {
-	int	id;
-        char	line[BUFF_SIZE];
-        struct	iovec iov[1];
-        pthread_mutex_t	lock;
-	struct	rbuf_entry *next;
+	int			id;
+	int			cnt;	/* byte count of last readv/writev */
+        char			line[BUFF_SIZE];
+        struct	iovec 		iov[1];
+        pthread_mutex_t		mtx_lock;
+        pthread_rwlock_t	rw_lock;
+	struct	rbuf_entry	*next;
 };
 
-int rbuf_readfrom(struct io_params *);
-int rbuf_writeto(struct io_params *);
+
+int rbuf_rwlock_readfrom(struct io_params *);
+int rbuf_rwlock_writeto(struct io_params *);
+
+int rbuf_mtx_readfrom(struct io_params *);
+int rbuf_mtx_writeto(struct io_params *);
+int rbuf_t3_readfrom(struct io_params *);
+
 void read_cleanup(void *);
-struct rbuf_entry *rbuf_new(void);
+struct rbuf_entry *rbuf_new(struct io_cfg);
 void free_rbuf(struct rbuf_entry *);
 #endif

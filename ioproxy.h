@@ -35,13 +35,24 @@
 #include "lib/buff_management/rbuf.h"
 #include "lib/file_types/ftypes.h"
 
-struct t_args {
-	struct rbuf_entry *rbuf;
-	struct io_params  *iop;
-};
+void terminate(void);
+void * iocfg_manager(void *);
+void * io_thread(void *);
+void * io_t3_thread(void *);
 
 int validate_path(struct io_params *);
 int validate_ftype(struct io_params *, struct stat *);
+void ioparam_list_kill(struct io_cfg *);
+int cancel_ioparam(struct io_params *);
+
+void set_thrd_sigmask(sigset_t *);
+void release_mtx(void *);
+void *sigterm_thrd(void *);
+
+void iop_setup(struct io_cfg *);
+void *iop0_thrd(void *);
+
+void copy_io_params(struct io_params *, struct io_params *);
 
 
 
