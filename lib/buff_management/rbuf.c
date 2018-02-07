@@ -41,7 +41,6 @@ int rbuf_mtx_writeto(struct io_params *iop)
 	pthread_cond_signal(&iop->readable);
 
 	for (;;) {
-		printf("HERE w %s %d\n", iop->path, iop->io_fd);
 		if ((i = read(iop->io_fd, w_ptr->line, w_ptr->len)) > 0) {
 			printf("w_ptr read %d bytes from %d into ringbuff\n", i, iop->io_fd);
 			w_ptr->len = i;
@@ -57,7 +56,6 @@ int rbuf_mtx_writeto(struct io_params *iop)
 			/* read returned EOF - not an error 
 			 * COULD SET UP ASYNC IO NOTIFICATION
 			 */
-		 	printf("Read returned 0\n");
 			sleep(3);
 			continue;
 		} else {
@@ -109,7 +107,6 @@ int rbuf_mtx_readfrom(struct io_params *iop)
 			return -1;
 		    }
 		} else if (r == 0) {
-		    printf("write() returned 0\n");
 		    sleep(1);
 		    continue;
 		} else if (r < r_ptr->len) {
@@ -205,8 +202,6 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 	    pthread_cond_wait(&iop->readable, &iop->listlock);
 	pthread_mutex_unlock(&iop->listlock);
 
-	printf("Proceeding...%d\n", iop->io_fd);
-
 	if (pthread_rwlock_rdlock(&r_ptr->rw_lock) != 0)
 	    printf("W.1.1: Failed to get lock for %d\n", r_ptr->id);
 
@@ -228,7 +223,6 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 			return -1;
 		    }
 		} else if (r == 0) {
-		    printf("write() returned 0\n");
 		    sleep(1);
 		    continue;
 		} else if (r < r_ptr->len) {
@@ -294,7 +288,6 @@ int rbuf_t3_readfrom(struct io_params *iop)
 			return -1;
 		    }
 		} else if (r == 0) {
-		    printf("write(2) returned 0\n");
 		    pthread_mutex_unlock(iop->fd_lock);
 		    sleep(3);
 		    pthread_mutex_lock(iop->fd_lock);
