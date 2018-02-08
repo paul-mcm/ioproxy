@@ -65,28 +65,28 @@ int rbuf_mtx_writeto(struct io_params *iop)
 	pthread_cond_signal(&iop->readable);
 
 	for (;;) {
-		if ((i = read(iop->io_fd, w_ptr->line, w_ptr->len)) > 0) {
-			printf("w_ptr read %d bytes from %d into ringbuff\n", i, iop->io_fd);
-			w_ptr->len = i;
-
-			MTX_LOCK(&w_ptr->next->mtx_lock);
-			MTX_UNLOCK(&w_ptr->mtx_lock);
-
-			iop->bytes += i;
-			w_ptr = w_ptr->next;
-		} else if (i == 0) {
-			/* read returned EOF - not an error 
-			 * COULD SET UP ASYNC IO NOTIFICATION
-			 */
-			sleep(3);
-			continue;
+	    if ((i = read(iop->io_fd, w_ptr->line, w_ptr->len)) > 0) {
+		w_ptr->len = i;
+		MTX_LOCK(&w_ptr->next->mtx_lock);
+		MTX_UNLOCK(&w_ptr->mtx_lock);
+		iop->bytes += i;
+		w_ptr = w_ptr->next;
+		continue;
+	    } else if (i == 0) {
+		/* read returned EOF - not an error 
+		* COULD SET UP ASYNC IO NOTIFICATION
+		*/
+		sleep(3);
+		continue;
+	    } else {
+		if (read_error(iop, errno) == 0) {
+		    sleep(3);
+		    continue;
 		} else {
-			if (errno == EPIPE || errno == ENETDOWN || errno == EDESTADDRREQ || EBADF)
-				log_ret("read error - read end closed");
-			MTX_UNLOCK(&w_ptr->mtx_lock);
-
-			return -1;
-		}
+		    MTX_UNLOCK(&w_ptr->mtx_lock);
+		    return -1;
+ 		}
+	    }
 	}
 }
 
@@ -94,11 +94,10 @@ int rbuf_mtx_readfrom(struct io_params *iop)
 {
         struct rbuf_entry *r_ptr;
 	int nleft;
-        int r;
+        int r, nw;
 	char *lptr;
 
 	r_ptr = iop->rbuf_p;
-	lptr = r_ptr->line;
 
         MTX_LOCK(&iop->listlock);
         while (*iop->listready == 0)
@@ -108,11 +107,13 @@ int rbuf_mtx_readfrom(struct io_params *iop)
 	MTX_LOCK(&r_ptr->mtx_lock);
 
         for (;;) {
+	    lptr = r_ptr->line;
 	    nleft = r_ptr->len;
+
 	    while (nleft > 0) {
-		r = write(iop->io_fd, lptr, r_ptr->len);
+		nw = write(iop->io_fd, lptr, r_ptr->len);
 		/* SOME KNOWN ERROR; WORTH RETRYING */
-		if (r < 0) {
+		if (nw < 0) {
 		    if (write_error(iop, errno) == 0) {
 			sleep_unlocked(3, &r_ptr->mtx_lock);
 			continue;
@@ -121,24 +122,22 @@ int rbuf_mtx_readfrom(struct io_params *iop)
 			MTX_UNLOCK(&r_ptr->mtx_lock);
 			return -1;
 		    }
-		} else if (r == 0) {
+		} else if (nw == 0) {
 		    sleep_unlocked(3, &r_ptr->mtx_lock);
 		    continue;
-		} else if (r < r_ptr->len) {
-		    nleft -= r;
-		    lptr += r;
-		    iop->bytes += r;
+		} else if (nw < r_ptr->len) {
+		    nleft -= nw;
+		    lptr += nw;
+		    iop->bytes += nw;
 		    continue;
 		} else {
-		    nleft -= r;
-		    iop->bytes += r;
-		    printf("\nWee: WROTE %d bytes from ringbuff to %d\n", iop->io_fd);
+		    nleft -= nw;
+		    iop->bytes += nw;
 
 		    MTX_LOCK(&r_ptr->next->mtx_lock);
 		    MTX_UNLOCK(&r_ptr->mtx_lock);
 
 		    r_ptr = r_ptr->next;
-		    lptr = r_ptr->line;
 		}
 	    }
         }       
@@ -150,7 +149,6 @@ int rbuf_rwlock_writeto(struct io_params *iop)
 	int i, r;
 
 	w_ptr = iop->rbuf_p;
-/*	printf("R.1: Grabbing lock for %d\n", w_ptr->id); */
 
 	/* CALL pthread_conf_signal() TO SYNCHRONIZE 
 	* LOCKING OF FIRST ENTRY IN LIST.  THIS THREAD 
@@ -168,28 +166,28 @@ int rbuf_rwlock_writeto(struct io_params *iop)
 	pthread_cond_signal(&iop->readable);
 
 	for (;;) {
-/*		printf("w_ptr id: %d\n", w_ptr->id); */
-		if ((i = read(iop->io_fd, w_ptr->line, w_ptr->len)) > 0) {
-			printf("w_ptr read %d bytes from %d into ringbuff\n", i, iop->io_fd);
-			w_ptr->len = i;
+	    if ((i = read(iop->io_fd, w_ptr->line, w_ptr->len)) > 0) {
+		printf("w_ptr read %d bytes from %d into ringbuff\n", i, iop->io_fd);
+		w_ptr->len = i;
 	
-			WR_LOCK(&w_ptr->next->rw_lock);
-			RW_UNLOCK(&w_ptr->rw_lock);
+		WR_LOCK(&w_ptr->next->rw_lock);
+		RW_UNLOCK(&w_ptr->rw_lock);
 
-			iop->bytes += i;
-			w_ptr = w_ptr->next;
-		} else if (i == 0) {
-			/* read returned EOF - not an error */
-			sleep(3);
-			continue;
+		iop->bytes += i;
+		w_ptr = w_ptr->next;
+	    } else if (i == 0) {
+		/* read returned EOF - not an error */
+		sleep(3);
+		continue;
+	    } else {
+		if (read_error(iop, errno) == 0) {
+		    sleep(3);
+		    continue;
 		} else {
-			if (errno == EPIPE || errno == ENETDOWN || errno == EDESTADDRREQ || EBADF)
-				log_ret("read error - read end closed");
-
-			RW_UNLOCK(&w_ptr->rw_lock);
-
-			return -1;
+		    RW_UNLOCK(&w_ptr->rw_lock);
+		    return -1;
 		}
+	    }
 	}
 }
 
@@ -198,10 +196,9 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 	struct rbuf_entry *r_ptr;
 	char *buf_ptr;
 	int nleft;
-	int r;
+	int r, nw;
 	char *lptr;
 
-	r_ptr = iop->rbuf_p;
 	lptr = r_ptr->line;
 
 	MTX_LOCK(&iop->listlock);
@@ -213,11 +210,13 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 	RD_LOCK(&r_ptr->rw_lock);
 
 	for (;;) {
+	    r_ptr = iop->rbuf_p;
 	    nleft = r_ptr->len;
+
 	    while (nleft > 0) {
-		r = write(iop->io_fd, lptr, r_ptr->len);
+		nw = write(iop->io_fd, lptr, r_ptr->len);
 		/* SOME KNOWN ERROR; WORTH RETRYING */
-		if (r < 0) {
+		if (nw < 0) {
 		    if (write_error(iop, errno) == 0) {
 			pthread_rwlock_unlock(&r_ptr->rw_lock);
 			sleep(3);
@@ -228,20 +227,19 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 			RW_UNLOCK(&r_ptr->rw_lock);
 			return -1;
 		    }
-		} else if (r == 0) {
+		} else if (nw == 0) {
 		    RW_UNLOCK(&r_ptr->rw_lock);
 		    sleep(3);
 		    RD_LOCK(&r_ptr->rw_lock);
 		    continue;
-		} else if (r < r_ptr->len) {
-		    nleft -= r;
-		    lptr += r;
-		    iop->bytes += r;
+		} else if (nw < r_ptr->len) {
+		    nleft -= nw;
+		    lptr += nw;
+		    iop->bytes += nw;
 		    continue;
 		} else {
-		    nleft -= r;
-		    iop->bytes += r;
-		    printf("\nWee: WROTE %d bytes from ringbuff to %d\n", r, iop->io_fd);
+		    nleft -= nw;
+		    iop->bytes += nw;
 
 		    RD_LOCK(&r_ptr->next->rw_lock);
 		    RW_UNLOCK(&r_ptr->rw_lock);
@@ -262,8 +260,6 @@ int rbuf_t3_readfrom(struct io_params *iop)
 	r_ptr = iop->rbuf_p;
 	lptr = r_ptr->line;
 
-/*	printf("readfrom: Buff: %p, %s\n", iop->rbuf_p, iop->path); */
-
         MTX_LOCK(&iop->listlock);
 
         while (*iop->listready == 0)
@@ -274,8 +270,10 @@ int rbuf_t3_readfrom(struct io_params *iop)
 	MTX_LOCK(&iop->fd_lock);
 	
         for (;;) {
+	    lptr = r_ptr->line;
 	    nleft = r_ptr->len;
-	    while (nleft >0) {
+
+	    while (nleft > 0) {
 		nw = write(*iop->iofd_p, lptr, r_ptr->len);
 		if (nw < 0) {
 		    if (write_error(iop, errno) == 0) {
@@ -291,7 +289,7 @@ int rbuf_t3_readfrom(struct io_params *iop)
 		    continue;
 		} else if (nw < r_ptr->len) {
 		    nleft -= nw;
-		    lptr -= nw;
+		    lptr += nw;
 		    iop->bytes += nw;
 		    continue;
 		} else {
@@ -306,7 +304,6 @@ int rbuf_t3_readfrom(struct io_params *iop)
 		    MTX_LOCK(&iop->fd_lock);
 
 		    r_ptr = r_ptr->next;
-		    lptr = r_ptr->line;
 		} 
 	    }
 	}      
@@ -370,7 +367,21 @@ int write_error(struct io_params *iop, int e)
 	    e == ENETDOWN 	|| \
 	    e == EDESTADDRREQ 	|| \
 	    e == ENOTCONN) {
-		log_ret("write error - read end closed for %d", iop->io_fd);
+		log_ret("write error - write end closed for %d", iop->io_fd);
+		return 0;
+	    } else {
+		log_ret("unknown write error %d", e);
+		return 1;
+	    }
+}
+
+int read_error(struct io_params *iop, int e)
+{
+	if (e == EPIPE 		|| \
+	    e == ENETDOWN 	|| \
+	    e == EDESTADDRREQ 	|| \
+	    e == ENOTCONN) {
+		log_ret("read error - read end closed for %d", iop->io_fd);
 		return 0;
 	    } else {
 		log_ret("unknown write error %d", e);

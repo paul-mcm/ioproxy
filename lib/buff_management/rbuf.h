@@ -64,4 +64,7 @@ struct rbuf_entry *new_rbuf(int);
 void free_rbuf(struct rbuf_entry *);
 void sleep_unlocked(int, pthread_mutex_t *);
 
+int write_error(struct io_params *, int);
+int read_error(struct io_params *, int);
+
 #endif
