@@ -166,7 +166,7 @@ void iop_setup(struct io_cfg *iocfg)
 		*newiop1->iop->iofd_p = -1;
 
 	    newiop1->iop->fd_lock = malloc(sizeof(pthread_mutex_t));
-	    if (pthread_mutex_init(newiop1->iop->fd_lock, NULL) != 0) {
+	    if (pthread_mutex_init(&newiop1->iop->fd_lock, NULL) != 0) {
                 printf("fd_lock init error\n");
                 exit(-1);
             }
@@ -245,7 +245,7 @@ void *io_t3_thread(void *arg)
 
 	for (;;) {
 	    if (*iop->iofd_p < 0) {
-		pthread_mutex_lock(iop->fd_lock);
+		pthread_mutex_lock(&iop->fd_lock);
 		printf("Got lock: %s\n", iop->path);
 
 		if (*iop->iofd_p < 0) {
@@ -253,15 +253,15 @@ void *io_t3_thread(void *arg)
 		    if ((*iop->iofd_p = open_desc(iop)) < 0) {
 			printf("open error. Sleeping...\n");
 			sleep(10);
-			pthread_mutex_unlock(iop->fd_lock);
+			pthread_mutex_unlock(&iop->fd_lock);
 			continue;
 		    } else {
 			printf("Releasing lock: %s Desc: %d\n\n", iop->path, *iop->iofd_p);
-			pthread_mutex_unlock(iop->fd_lock);
+			pthread_mutex_unlock(&iop->fd_lock);
 		    }
 		} else {
 		    printf("Releasing lock: %s Desc: %d\n\n", iop->path, *iop->iofd_p);
-		    pthread_mutex_unlock(iop->fd_lock);
+		    pthread_mutex_unlock(&iop->fd_lock);
 		}
 	    }
 	    if (is_src(iop))

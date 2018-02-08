@@ -40,23 +40,6 @@ if ((r = pthread_mutex_unlock(m)) != 0) {       \
     log_die("mtx unlock error:  %d\n", r);      \
 }
 
-#define T3_MTX_LOCK(d, rb)			\
-if ((r = pthread_mutex_lock(d)) != 0) {       \
-    log_die("mtx lock error:  %d\n", r);      \
-}						\
-if ((r = pthread_mutex_lock(rb)) != 0) {	\
-    log_die("mtx lock error:  %d\n", r);      \
-}
-
-#define T3_MTX_UNLOCK(m)                        \
-if ((r = pthread_mutex_unlock(d)) != 0) {       \
-    log_die("mtx unlock error:  %d\n", r);      \
-}						\
-if ((r = pthread_mutex_unlock(rb)) != 0) {	\
-    log_die("mtx unlock error:  %d\n", r);      \
-}
-
-
 int rbuf_mtx_writeto(struct io_params *iop)
 {
 	struct rbuf_entry *w_ptr;
@@ -131,9 +114,7 @@ int rbuf_mtx_readfrom(struct io_params *iop)
 		/* SOME KNOWN ERROR; WORTH RETRYING */
 		if (r < 0) {
 		    if (write_error(iop, errno) == 0) {
-			MTX_UNLOCK(&r_ptr->mtx_lock);
-			sleep(3);
-			MTX_LOCK(&r_ptr->mtx_lock)
+			sleep_unlocked(3, &r_ptr->mtx_lock);
 			continue;
 		    } else {
 			/* UNKOWN ERROR; * ASSUME DESC INVALID */
@@ -141,9 +122,7 @@ int rbuf_mtx_readfrom(struct io_params *iop)
 			return -1;
 		    }
 		} else if (r == 0) {
-		    MTX_UNLOCK(&r_ptr->mtx_lock);
-		    sleep(1);
-		    MTX_LOCK(&r_ptr->mtx_lock);
+		    sleep_unlocked(3, &r_ptr->mtx_lock);
 		    continue;
 		} else if (r < r_ptr->len) {
 		    nleft -= r;
@@ -240,9 +219,9 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 		/* SOME KNOWN ERROR; WORTH RETRYING */
 		if (r < 0) {
 		    if (write_error(iop, errno) == 0) {
-			RW_UNLOCK(&r_ptr->rw_lock);
+			pthread_rwlock_unlock(&r_ptr->rw_lock);
 			sleep(3);
-			RD_LOCK(&r_ptr->rw_lock);
+			pthread_rwlock_rdlock(&r_ptr->rw_lock);
 			continue;
 		    } else {
 			/* UNKOWN ERROR; * ASSUME DESC INVALID */
@@ -251,7 +230,7 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 		    }
 		} else if (r == 0) {
 		    RW_UNLOCK(&r_ptr->rw_lock);
-		    sleep(1);
+		    sleep(3);
 		    RD_LOCK(&r_ptr->rw_lock);
 		    continue;
 		} else if (r < r_ptr->len) {
@@ -277,7 +256,7 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 int rbuf_t3_readfrom(struct io_params *iop)
 {
         struct rbuf_entry *r_ptr;
-        int r, nleft;
+        int r, nw, nleft;
 	char *lptr;
 
 	r_ptr = iop->rbuf_p;
@@ -292,46 +271,39 @@ int rbuf_t3_readfrom(struct io_params *iop)
         MTX_UNLOCK(&iop->listlock);
 
 	MTX_LOCK(&r_ptr->mtx_lock);
-	MTX_LOCK(iop->fd_lock);
+	MTX_LOCK(&iop->fd_lock);
 	
         for (;;) {
 	    nleft = r_ptr->len;
 	    while (nleft >0) {
-		r = write(*iop->iofd_p, lptr, r_ptr->len);
-		if (r < 0) {
+		nw = write(*iop->iofd_p, lptr, r_ptr->len);
+		if (nw < 0) {
 		    if (write_error(iop, errno) == 0) {
-			MTX_UNLOCK(iop->fd_lock);
-			MTX_UNLOCK(&r_ptr->mtx_lock);
-			sleep(3);
-			MTX_LOCK(&r_ptr->mtx_lock);
-			MTX_LOCK(iop->fd_lock);
+			sleep_unlocked(3, &r_ptr->mtx_lock);
+			continue;
 		    } else {
-			MTX_UNLOCK(iop->fd_lock);
+			MTX_UNLOCK(&iop->fd_lock);
 			MTX_UNLOCK(&r_ptr->mtx_lock);
 			return -1;
 		    }
-		} else if (r == 0) {
-		    MTX_UNLOCK(iop->fd_lock);
-		    MTX_UNLOCK(&r_ptr->mtx_lock);
-		    sleep(3);
-		    MTX_LOCK(&r_ptr->mtx_lock);
-		    MTX_LOCK(iop->fd_lock);
+		} else if (nw == 0) {
+		    sleep_unlocked(3, &iop->fd_lock);
 		    continue;
-		} else if (r < r_ptr->len) {
-		    nleft -= r;
-		    lptr -= r;
-		    iop->bytes += r;
+		} else if (nw < r_ptr->len) {
+		    nleft -= nw;
+		    lptr -= nw;
+		    iop->bytes += nw;
 		    continue;
 		} else {
-		    nleft -= r;
-		    iop->bytes += r;
+		    nleft -= nw;
+		    iop->bytes += nw;
 
-		    log_msg("T3 RBUFF->%d: %d bytes\n", *iop->iofd_p, r);
+		    log_msg("T3 RBUFF->%d: %d bytes\n", *iop->iofd_p, nw);
 
-		    MTX_UNLOCK(iop->fd_lock);
+		    MTX_UNLOCK(&iop->fd_lock);
 		    MTX_LOCK(&r_ptr->next->mtx_lock);
 		    MTX_UNLOCK(&r_ptr->mtx_lock);
-		    MTX_LOCK(iop->fd_lock);
+		    MTX_LOCK(&iop->fd_lock);
 
 		    r_ptr = r_ptr->next;
 		    lptr = r_ptr->line;
@@ -404,4 +376,13 @@ int write_error(struct io_params *iop, int e)
 		log_ret("unknown write error %d", e);
 		return 1;
 	    }
+}
+
+void sleep_unlocked(int n, pthread_mutex_t *l)
+{
+	int r;
+	
+	MTX_UNLOCK(l);
+	sleep(n);
+	MTX_LOCK(l);
 }

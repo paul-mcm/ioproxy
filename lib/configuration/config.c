@@ -502,7 +502,7 @@ void free_iop0(struct iop0_params *iop0)
 	iop = iop0->iop;
         pthread_mutex_destroy(&iop->listlock);
         pthread_cond_destroy(&iop->readable);
-	pthread_mutex_destroy(iop->fd_lock);
+	pthread_mutex_destroy(&iop->fd_lock);
 
 	free_rbuf(iop->rbuf_p);  /* XXX WHAT HAPPENS TO OTHER THREADS LOCKED ON RBUFF? */
         free(iop->listready);  /* XXX WHY IS THIS MALLOC'D? */

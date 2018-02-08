@@ -62,4 +62,6 @@ int rbuf_t3_readfrom(struct io_params *);
 void read_cleanup(void *);
 struct rbuf_entry *new_rbuf(int);
 void free_rbuf(struct rbuf_entry *);
+void sleep_unlocked(int, pthread_mutex_t *);
+
 #endif
