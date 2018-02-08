@@ -15,6 +15,31 @@
 
 #include "rbuf.h"
 
+#define RD_LOCK(m)                              \
+if ((r = pthread_rwlock_rdlock(m)) != 0) {      \
+    log_die("rdlock error: %d\n", r);           \
+} 
+
+#define WR_LOCK(m)                              \
+if ((r = pthread_rwlock_wrlock(m)) != 0) {      \
+    log_die("wrlock error: %d\n", r);           \
+}
+
+#define RW_UNLOCK(m)                            \
+if ((r = pthread_rwlock_unlock(m)) != 0) {      \
+    log_die("rwlock unlock: %d\n", r);          \
+}
+
+#define MTX_LOCK(m)                             \
+if ((r = pthread_mutex_lock(m)) != 0) {         \
+    log_die("mtx lock error: %d\n", r);         \
+}
+
+#define MTX_UNLOCK(m)                           \
+if ((r = pthread_mutex_unlock(m)) != 0) {        \
+    log_die("mtx unlock error:  %d\n", r);      \
+}
+
 int rbuf_mtx_writeto(struct io_params *iop)
 {
 	struct rbuf_entry *w_ptr;
@@ -30,12 +55,11 @@ int rbuf_mtx_writeto(struct io_params *iop)
 	*/
 
 	/* GRAB LOCK */
-	if (pthread_mutex_lock(&w_ptr->mtx_lock) != 0)
-		log_die("pthread_mutex_lock locking error");
+	MTX_LOCK(&w_ptr->mtx_lock);
 
-	pthread_mutex_lock(&iop->listlock);
+	MTX_LOCK(&iop->listlock);
 	*iop->listready = 1;
-	pthread_mutex_unlock(&iop->listlock);
+	MTX_UNLOCK(&iop->listlock);
 
 	/* SIGNAL WRITE THREAD */
 	pthread_cond_signal(&iop->readable);
@@ -45,11 +69,8 @@ int rbuf_mtx_writeto(struct io_params *iop)
 			printf("w_ptr read %d bytes from %d into ringbuff\n", i, iop->io_fd);
 			w_ptr->len = i;
 
-			if (pthread_mutex_lock(&w_ptr->next->mtx_lock) < 0)
-				log_die("pthread_mutex_lock locking error");
-
-			if (pthread_mutex_unlock(&w_ptr->mtx_lock) < 0)
-                                printf("pthread_mutex_unlock unlocking error");
+			MTX_LOCK(&w_ptr->next->mtx_lock);
+			MTX_UNLOCK(&w_ptr->mtx_lock);
 
 			w_ptr = w_ptr->next;
 		} else if (i == 0) {
@@ -61,9 +82,7 @@ int rbuf_mtx_writeto(struct io_params *iop)
 		} else {
 			if (errno == EPIPE || errno == ENETDOWN || errno == EDESTADDRREQ || EBADF)
 				log_ret("read error - read end closed");
-
-			if (pthread_mutex_unlock(&w_ptr->mtx_lock) < 0)
-				printf("pthread_mutex_unlock unlocking error");
+			MTX_UNLOCK(&w_ptr->mtx_lock);
 
 			return -1;
 		}
@@ -80,14 +99,12 @@ int rbuf_mtx_readfrom(struct io_params *iop)
 	r_ptr = iop->rbuf_p;
 	lptr = r_ptr->line;
 
-        pthread_mutex_lock(&iop->listlock);
-
+        MTX_LOCK(&iop->listlock);
         while (*iop->listready == 0)
                 pthread_cond_wait(&iop->readable, &iop->listlock);
-        pthread_mutex_unlock(&iop->listlock);
+        MTX_UNLOCK(&iop->listlock);
 
-	if (pthread_mutex_lock(&r_ptr->mtx_lock) != 0)
-		log_die("pthread_mutex_lock locking error");
+	MTX_LOCK(&r_ptr->mtx_lock);
 
         for (;;) {
 	    nleft = r_ptr->len;
@@ -96,14 +113,13 @@ int rbuf_mtx_readfrom(struct io_params *iop)
 		/* SOME KNOWN ERROR; WORTH RETRYING */
 		if (r < 0) {
 		    if (write_error(iop, errno) == 0) {
-			pthread_mutex_unlock(&r_ptr->mtx_lock);
+			MTX_UNLOCK(&r_ptr->mtx_lock);
 			sleep(3);
-			if (pthread_mutex_lock(&r_ptr->mtx_lock) != 0)
-			    printf("W.1.1: Failed to get lock for %d\n", r_ptr->id);
+			MTX_LOCK(&r_ptr->mtx_lock)
 			continue;
 		    } else {
 			/* UNKOWN ERROR; * ASSUME DESC INVALID */
-			pthread_mutex_unlock(&r_ptr->mtx_lock);
+			MTX_UNLOCK(&r_ptr->mtx_lock);
 			return -1;
 		    }
 		} else if (r == 0) {
@@ -119,11 +135,8 @@ int rbuf_mtx_readfrom(struct io_params *iop)
 		    iop->bytes += r;
 		    printf("\nWee: WROTE %d bytes from ringbuff to %d\n", iop->io_fd);
 
-		    if (pthread_mutex_lock(&r_ptr->next->mtx_lock) != 0)
-		    	printf("W.1.1: Failed to get lock for %d\n", r_ptr->id);
-
-		    if (pthread_mutex_unlock(&r_ptr->mtx_lock) < 0)
-		    	printf("W.3.1: failed to unlock %d %s\n",  r_ptr->id);
+		    MTX_LOCK(&r_ptr->next->mtx_lock);
+		    MTX_UNLOCK(&r_ptr->mtx_lock);
 
 		    r_ptr = r_ptr->next;
 		    lptr = r_ptr->line;
@@ -146,12 +159,11 @@ int rbuf_rwlock_writeto(struct io_params *iop)
 	*/
 
 	/* GRAB LOCK */
-	if (pthread_rwlock_wrlock(&w_ptr->rw_lock) != 0)
-		log_die("pthread_mutex_lock locking error");
+	WR_LOCK(&w_ptr->rw_lock);
 
-	pthread_mutex_lock(&iop->listlock);
+	MTX_LOCK(&iop->listlock);
 	*iop->listready = 1;
-	pthread_mutex_unlock(&iop->listlock);
+	MTX_UNLOCK(&iop->listlock);
 
 	/* SIGNAL WRITE THREAD */
 	pthread_cond_signal(&iop->readable);
@@ -162,11 +174,8 @@ int rbuf_rwlock_writeto(struct io_params *iop)
 			printf("w_ptr read %d bytes from %d into ringbuff\n", i, iop->io_fd);
 			w_ptr->len = i;
 	
-			if (pthread_rwlock_wrlock(&w_ptr->next->rw_lock) < 0)
-				log_die("pthread_rwlock_lock() locking error");
- 
-			if (pthread_rwlock_unlock(&w_ptr->rw_lock) < 0)
-                                printf("pthread_rw_unlock() error");
+			WR_LOCK(&w_ptr->next->rw_lock);
+			RW_UNLOCK(&w_ptr->rw_lock);
 
 			w_ptr = w_ptr->next;
 		} else if (i == 0) {
@@ -177,8 +186,7 @@ int rbuf_rwlock_writeto(struct io_params *iop)
 			if (errno == EPIPE || errno == ENETDOWN || errno == EDESTADDRREQ || EBADF)
 				log_ret("read error - read end closed");
 
-			if (pthread_rwlock_unlock(&w_ptr->rw_lock) < 0)
-				printf("pthread_rwlock_unlock() error");
+			RW_UNLOCK(&w_ptr->rw_lock);
 
 			return -1;
 		}
@@ -196,14 +204,13 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 	r_ptr = iop->rbuf_p;
 	lptr = r_ptr->line;
 
-	pthread_mutex_lock(&iop->listlock);
+	MTX_LOCK(&iop->listlock);
 
 	while (*iop->listready == 0)
 	    pthread_cond_wait(&iop->readable, &iop->listlock);
-	pthread_mutex_unlock(&iop->listlock);
+	MTX_UNLOCK(&iop->listlock);
 
-	if (pthread_rwlock_rdlock(&r_ptr->rw_lock) != 0)
-	    printf("W.1.1: Failed to get lock for %d\n", r_ptr->id);
+	RD_LOCK(&r_ptr->rw_lock);
 
 	for (;;) {
 	    nleft = r_ptr->len;
@@ -212,14 +219,13 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 		/* SOME KNOWN ERROR; WORTH RETRYING */
 		if (r < 0) {
 		    if (write_error(iop, errno) == 0) {
-			pthread_rwlock_unlock(&r_ptr->rw_lock);
+			RW_UNLOCK(&r_ptr->rw_lock);
 			sleep(3);
-			if (pthread_rwlock_rdlock(&r_ptr->rw_lock) != 0)
-			    printf("W.1.1: Failed to get lock for %d\n", r_ptr->id);
+			RD_LOCK(&r_ptr->rw_lock);
 			continue;
 		    } else {
 			/* UNKOWN ERROR; * ASSUME DESC INVALID */
-			pthread_rwlock_unlock(&r_ptr->rw_lock);
+			RW_UNLOCK(&r_ptr->rw_lock);
 			return -1;
 		    }
 		} else if (r == 0) {
@@ -235,11 +241,8 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 		    iop->bytes += r;
 		    printf("\nWee: WROTE %d bytes from ringbuff to %d\n", r, iop->io_fd);
 
-		    if (pthread_rwlock_rdlock(&r_ptr->next->rw_lock) != 0)
-			printf("W.1.1: Failed to get lock for %d\n", r_ptr->id);
-
-		    if (pthread_rwlock_unlock(&r_ptr->rw_lock) < 0)
-			printf("W.3.1: failed to unlock %d %s\n",  r_ptr->id);
+		    RD_LOCK(&r_ptr->next->rw_lock);
+		    RW_UNLOCK(&r_ptr->rw_lock);
 
 		    r_ptr = r_ptr->next;
 		    lptr = r_ptr->line;
@@ -259,38 +262,35 @@ int rbuf_t3_readfrom(struct io_params *iop)
 
 /*	printf("readfrom: Buff: %p, %s\n", iop->rbuf_p, iop->path); */
 
-        pthread_mutex_lock(&iop->listlock);
+        MTX_LOCK(&iop->listlock);
 
         while (*iop->listready == 0)
                 pthread_cond_wait(&iop->readable, &iop->listlock);
-        pthread_mutex_unlock(&iop->listlock);
+        MTX_UNLOCK(&iop->listlock);
 
-	if (pthread_mutex_lock(&r_ptr->mtx_lock) != 0)
-		printf("W.1.1: Failed to get lock for %d\n", r_ptr->id);
-
-	if (pthread_mutex_lock(iop->fd_lock) != 0)
-		printf("Locking error in rbuf_t3\n");
-
+	MTX_LOCK(&r_ptr->mtx_lock);
+	MTX_LOCK(iop->fd_lock);
+	
         for (;;) {
 	    nleft = r_ptr->len;
 	    while (nleft >0) {
 		r = write(*iop->iofd_p, lptr, r_ptr->len);
 		if (r < 0) {
 		    if (write_error(iop, errno) == 0) {
-			pthread_mutex_unlock(iop->fd_lock);
-			pthread_mutex_unlock(&r_ptr->mtx_lock);
+			MTX_UNLOCK(iop->fd_lock);
+			MTX_UNLOCK(&r_ptr->mtx_lock);
 			sleep(3);
-			pthread_mutex_lock(&r_ptr->mtx_lock);
-			pthread_mutex_lock(iop->fd_lock);
+			MTX_LOCK(&r_ptr->mtx_lock);
+			MTX_LOCK(iop->fd_lock);
 		    } else {
-			pthread_mutex_unlock(iop->fd_lock);
-			pthread_mutex_unlock(&r_ptr->mtx_lock);
+			MTX_UNLOCK(iop->fd_lock);
+			MTX_UNLOCK(&r_ptr->mtx_lock);
 			return -1;
 		    }
 		} else if (r == 0) {
-		    pthread_mutex_unlock(iop->fd_lock);
+		    MTX_UNLOCK(iop->fd_lock);
 		    sleep(3);
-		    pthread_mutex_lock(iop->fd_lock);
+		    MTX_LOCK(iop->fd_lock);
 		    continue;
 		} else if (r < r_ptr->len) {
 		    nleft -= r;
@@ -303,17 +303,10 @@ int rbuf_t3_readfrom(struct io_params *iop)
 
 		    log_msg("T3 RBUFF->%d: %d bytes\n", *iop->iofd_p, r);
 
-		    if (pthread_mutex_unlock(iop->fd_lock) < 0)
-			printf("W.3.1: failed to unlock %d\n", iop->fd_lock);
-
-		    if (pthread_mutex_lock(&r_ptr->next->mtx_lock) != 0)
-			printf("W.1.1: Failed to get lock for %d\n", r_ptr->id);
-
-		    if (pthread_mutex_unlock(&r_ptr->mtx_lock) < 0)
-			printf("W.3.1: failed to unlock %d %s\n",  r_ptr->id);
-
-		    if (pthread_mutex_lock(iop->fd_lock) != 0)
-			printf("Locking error in rbuf_t3\n");
+		    MTX_UNLOCK(iop->fd_lock);
+		    MTX_LOCK(&r_ptr->next->mtx_lock);
+		    MTX_UNLOCK(&r_ptr->mtx_lock);
+		    MTX_LOCK(iop->fd_lock);
 
 		    r_ptr = r_ptr->next;
 		    lptr = r_ptr->line;
