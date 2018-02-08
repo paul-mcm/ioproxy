@@ -62,7 +62,7 @@ int rbuf_mtx_writeto(struct io_params *iop)
 	w_ptr = iop->rbuf_p;
 
 	for (;;) {
-	    if ((i = read(iop->io_fd, w_ptr->line, w_ptr->len)) > 0) {
+	    if ((i = read(iop->io_fd, w_ptr->line, RBUFF_SIZE)) > 0) {
 		w_ptr->len = i;
 		MTX_LOCK(&w_ptr->next->mtx_lock);
 		MTX_UNLOCK(&w_ptr->mtx_lock);
@@ -158,7 +158,7 @@ int rbuf_rwlock_writeto(struct io_params *iop)
 	w_ptr = iop->rbuf_p;
 
 	for (;;) {
-	    if ((i = read(iop->io_fd, w_ptr->line, w_ptr->len)) > 0) {
+	    if ((i = read(iop->io_fd, w_ptr->line, RBUFF_SIZE)) > 0) {
 		printf("w_ptr read %d bytes from %d into ringbuff\n", i, iop->io_fd);
 		w_ptr->len = i;
 	
