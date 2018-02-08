@@ -36,9 +36,26 @@ if ((r = pthread_mutex_lock(m)) != 0) {         \
 }
 
 #define MTX_UNLOCK(m)                           \
-if ((r = pthread_mutex_unlock(m)) != 0) {        \
+if ((r = pthread_mutex_unlock(m)) != 0) {       \
     log_die("mtx unlock error:  %d\n", r);      \
 }
+
+#define T3_MTX_LOCK(d, rb)			\
+if ((r = pthread_mutex_lock(d)) != 0) {       \
+    log_die("mtx lock error:  %d\n", r);      \
+}						\
+if ((r = pthread_mutex_lock(rb)) != 0) {	\
+    log_die("mtx lock error:  %d\n", r);      \
+}
+
+#define T3_MTX_UNLOCK(m)                        \
+if ((r = pthread_mutex_unlock(d)) != 0) {       \
+    log_die("mtx unlock error:  %d\n", r);      \
+}						\
+if ((r = pthread_mutex_unlock(rb)) != 0) {	\
+    log_die("mtx unlock error:  %d\n", r);      \
+}
+
 
 int rbuf_mtx_writeto(struct io_params *iop)
 {
