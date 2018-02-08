@@ -72,6 +72,7 @@ int rbuf_mtx_writeto(struct io_params *iop)
 			MTX_LOCK(&w_ptr->next->mtx_lock);
 			MTX_UNLOCK(&w_ptr->mtx_lock);
 
+			iop->bytes += i;
 			w_ptr = w_ptr->next;
 		} else if (i == 0) {
 			/* read returned EOF - not an error 
@@ -123,7 +124,9 @@ int rbuf_mtx_readfrom(struct io_params *iop)
 			return -1;
 		    }
 		} else if (r == 0) {
+		    MTX_UNLOCK(&r_ptr->mtx_lock);
 		    sleep(1);
+		    MTX_LOCK(&r_ptr->mtx_lock);
 		    continue;
 		} else if (r < r_ptr->len) {
 		    nleft -= r;
@@ -177,6 +180,7 @@ int rbuf_rwlock_writeto(struct io_params *iop)
 			WR_LOCK(&w_ptr->next->rw_lock);
 			RW_UNLOCK(&w_ptr->rw_lock);
 
+			iop->bytes += i;
 			w_ptr = w_ptr->next;
 		} else if (i == 0) {
 			/* read returned EOF - not an error */
@@ -229,7 +233,9 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 			return -1;
 		    }
 		} else if (r == 0) {
+		    RW_UNLOCK(&r_ptr->rw_lock);
 		    sleep(1);
+		    RD_LOCK(&r_ptr->rw_lock);
 		    continue;
 		} else if (r < r_ptr->len) {
 		    nleft -= r;
@@ -289,7 +295,9 @@ int rbuf_t3_readfrom(struct io_params *iop)
 		    }
 		} else if (r == 0) {
 		    MTX_UNLOCK(iop->fd_lock);
+		    MTX_UNLOCK(&r_ptr->mtx_lock);
 		    sleep(3);
+		    MTX_LOCK(&r_ptr->mtx_lock);
 		    MTX_LOCK(iop->fd_lock);
 		    continue;
 		} else if (r < r_ptr->len) {
