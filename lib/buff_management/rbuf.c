@@ -45,10 +45,6 @@ int rbuf_mtx_writeto(struct io_params *iop)
 	struct rbuf_entry *w_ptr;
 	int i, r;
 
-	w_ptr = iop->rbuf_p;
-
-/*	printf("writeto: Buff: %p, %s\n", iop->rbuf_p, iop->path); */
-
 	/* CALL pthread_conf_signal() TO SYNCHRONIZE 
 	* LOCKING OF FIRST ENTRY IN LIST.  THIS THREAD 
 	* MUST GET THE LOCK FIRST.
@@ -63,6 +59,7 @@ int rbuf_mtx_writeto(struct io_params *iop)
 
 	/* SIGNAL WRITE THREAD */
 	pthread_cond_signal(&iop->readable);
+	w_ptr = iop->rbuf_p;
 
 	for (;;) {
 	    if ((i = read(iop->io_fd, w_ptr->line, w_ptr->len)) > 0) {
@@ -97,13 +94,12 @@ int rbuf_mtx_readfrom(struct io_params *iop)
         int r, nw;
 	char *lptr;
 
-	r_ptr = iop->rbuf_p;
-
         MTX_LOCK(&iop->listlock);
         while (*iop->listready == 0)
                 pthread_cond_wait(&iop->readable, &iop->listlock);
         MTX_UNLOCK(&iop->listlock);
 
+	r_ptr = iop->rbuf_p;
 	MTX_LOCK(&r_ptr->mtx_lock);
 
         for (;;) {
@@ -112,16 +108,12 @@ int rbuf_mtx_readfrom(struct io_params *iop)
 
 	    while (nleft > 0) {
 		nw = write(iop->io_fd, lptr, r_ptr->len);
-		/* SOME KNOWN ERROR; WORTH RETRYING */
-		if (nw < 0) {
-		    if (write_error(iop, errno) == 0) {
-			sleep_unlocked(3, &r_ptr->mtx_lock);
-			continue;
-		    } else {
-			/* UNKOWN ERROR; * ASSUME DESC INVALID */
-			MTX_UNLOCK(&r_ptr->mtx_lock);
-			return -1;
-		    }
+		if (nw == r_ptr->len) {
+		    nleft -= nw;
+		    iop->bytes += nw;
+		    MTX_LOCK(&r_ptr->next->mtx_lock);
+		    MTX_UNLOCK(&r_ptr->mtx_lock);
+		    r_ptr = r_ptr->next;
 		} else if (nw == 0) {
 		    sleep_unlocked(3, &r_ptr->mtx_lock);
 		    continue;
@@ -130,14 +122,15 @@ int rbuf_mtx_readfrom(struct io_params *iop)
 		    lptr += nw;
 		    iop->bytes += nw;
 		    continue;
-		} else {
-		    nleft -= nw;
-		    iop->bytes += nw;
-
-		    MTX_LOCK(&r_ptr->next->mtx_lock);
-		    MTX_UNLOCK(&r_ptr->mtx_lock);
-
-		    r_ptr = r_ptr->next;
+		} else if (nw < 0) {
+		    if (write_error(iop, errno) == 0) {
+			sleep_unlocked(3, &r_ptr->mtx_lock);
+			continue;
+		    } else {
+			/* UNKOWN ERROR; * ASSUME DESC INVALID */
+			MTX_UNLOCK(&r_ptr->mtx_lock);
+			return -1;
+		    }
 		}
 	    }
         }       
@@ -147,8 +140,6 @@ int rbuf_rwlock_writeto(struct io_params *iop)
 {
 	struct rbuf_entry *w_ptr;
 	int i, r;
-
-	w_ptr = iop->rbuf_p;
 
 	/* CALL pthread_conf_signal() TO SYNCHRONIZE 
 	* LOCKING OF FIRST ENTRY IN LIST.  THIS THREAD 
@@ -164,6 +155,7 @@ int rbuf_rwlock_writeto(struct io_params *iop)
 
 	/* SIGNAL WRITE THREAD */
 	pthread_cond_signal(&iop->readable);
+	w_ptr = iop->rbuf_p;
 
 	for (;;) {
 	    if ((i = read(iop->io_fd, w_ptr->line, w_ptr->len)) > 0) {
@@ -199,34 +191,26 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 	int r, nw;
 	char *lptr;
 
-	lptr = r_ptr->line;
-
 	MTX_LOCK(&iop->listlock);
-
 	while (*iop->listready == 0)
 	    pthread_cond_wait(&iop->readable, &iop->listlock);
 	MTX_UNLOCK(&iop->listlock);
 
+	r_ptr = iop->rbuf_p;
 	RD_LOCK(&r_ptr->rw_lock);
 
 	for (;;) {
-	    r_ptr = iop->rbuf_p;
+	    lptr = r_ptr->line;
 	    nleft = r_ptr->len;
 
 	    while (nleft > 0) {
 		nw = write(iop->io_fd, lptr, r_ptr->len);
-		/* SOME KNOWN ERROR; WORTH RETRYING */
-		if (nw < 0) {
-		    if (write_error(iop, errno) == 0) {
-			pthread_rwlock_unlock(&r_ptr->rw_lock);
-			sleep(3);
-			pthread_rwlock_rdlock(&r_ptr->rw_lock);
-			continue;
-		    } else {
-			/* UNKOWN ERROR; * ASSUME DESC INVALID */
-			RW_UNLOCK(&r_ptr->rw_lock);
-			return -1;
-		    }
+		if (nw == r_ptr->len) {
+		    nleft -= nw;
+		    iop->bytes += nw;
+		    RD_LOCK(&r_ptr->next->rw_lock);
+		    RW_UNLOCK(&r_ptr->rw_lock);
+		    r_ptr = r_ptr->next;
 		} else if (nw == 0) {
 		    RW_UNLOCK(&r_ptr->rw_lock);
 		    sleep(3);
@@ -237,17 +221,20 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 		    lptr += nw;
 		    iop->bytes += nw;
 		    continue;
-		} else {
-		    nleft -= nw;
-		    iop->bytes += nw;
-
-		    RD_LOCK(&r_ptr->next->rw_lock);
-		    RW_UNLOCK(&r_ptr->rw_lock);
-
-		    r_ptr = r_ptr->next;
-		    lptr = r_ptr->line;
+		} else if (nw < 0) {
+		    /* SOME KNOWN ERROR; WORTH RETRYING? */
+		    if (write_error(iop, errno) == 0) {
+			pthread_rwlock_unlock(&r_ptr->rw_lock);
+			sleep(3);
+			pthread_rwlock_rdlock(&r_ptr->rw_lock);
+			continue;
+		    } else {
+			/* UNKOWN ERROR; * ASSUME DESC INVALID */
+			RW_UNLOCK(&r_ptr->rw_lock);
+			return -1;
+		    }
 		}
-	    }	
+	    }
 	}
 }
 
@@ -257,15 +244,12 @@ int rbuf_t3_readfrom(struct io_params *iop)
         int r, nw, nleft;
 	char *lptr;
 
-	r_ptr = iop->rbuf_p;
-	lptr = r_ptr->line;
-
         MTX_LOCK(&iop->listlock);
-
         while (*iop->listready == 0)
                 pthread_cond_wait(&iop->readable, &iop->listlock);
         MTX_UNLOCK(&iop->listlock);
 
+	r_ptr = iop->rbuf_p;
 	MTX_LOCK(&r_ptr->mtx_lock);
 	MTX_LOCK(&iop->fd_lock);
 	
@@ -275,15 +259,15 @@ int rbuf_t3_readfrom(struct io_params *iop)
 
 	    while (nleft > 0) {
 		nw = write(*iop->iofd_p, lptr, r_ptr->len);
-		if (nw < 0) {
-		    if (write_error(iop, errno) == 0) {
-			sleep_unlocked(3, &r_ptr->mtx_lock);
-			continue;
-		    } else {
-			MTX_UNLOCK(&iop->fd_lock);
-			MTX_UNLOCK(&r_ptr->mtx_lock);
-			return -1;
-		    }
+		if (nw == r_ptr->len) {
+		    nleft -= nw;
+		    iop->bytes += nw;
+
+		    MTX_UNLOCK(&iop->fd_lock);
+		    MTX_LOCK(&r_ptr->next->mtx_lock);
+		    MTX_UNLOCK(&r_ptr->mtx_lock);
+		    MTX_LOCK(&iop->fd_lock);
+		    r_ptr = r_ptr->next;
 		} else if (nw == 0) {
 		    sleep_unlocked(3, &iop->fd_lock);
 		    continue;
@@ -292,19 +276,16 @@ int rbuf_t3_readfrom(struct io_params *iop)
 		    lptr += nw;
 		    iop->bytes += nw;
 		    continue;
-		} else {
-		    nleft -= nw;
-		    iop->bytes += nw;
-
-		    log_msg("T3 RBUFF->%d: %d bytes\n", *iop->iofd_p, nw);
-
-		    MTX_UNLOCK(&iop->fd_lock);
-		    MTX_LOCK(&r_ptr->next->mtx_lock);
-		    MTX_UNLOCK(&r_ptr->mtx_lock);
-		    MTX_LOCK(&iop->fd_lock);
-
-		    r_ptr = r_ptr->next;
-		} 
+		} else if (nw < 0) {
+		    if (write_error(iop, errno) == 0) {
+			sleep_unlocked(3, &r_ptr->mtx_lock);
+			continue;
+		    } else {
+			MTX_UNLOCK(&iop->fd_lock);
+			MTX_UNLOCK(&r_ptr->mtx_lock);
+			return -1;
+		    }
+		}
 	    }
 	}      
 }
