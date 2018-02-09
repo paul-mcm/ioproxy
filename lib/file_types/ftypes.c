@@ -152,7 +152,6 @@ int open_unixsock(struct io_params *iop)
 		log_syserr("Error connecting to socket %s: %s\n", iop->path, strerror(errno));
 
 	} else if (iop->sock_data->conn_type == LISTEN) {
-	    printf("HERE\n");
 	    if ((r = connect(fd, (SA *) &servaddr, (socklen_t)sizeof(servaddr))) == 0) {
 		log_die("Error: listing socket already listening");
 	    } else if (r == -1 && errno != ENOENT) {
@@ -160,7 +159,6 @@ int open_unixsock(struct io_params *iop)
 			log_syserr("Failed to unlink unix socket: %s %s", iop->path, strerror(errno));
 	    }
 
-	    printf("HERE\n");
 	    old_umask = umask(S_IXUSR|S_IXGRP|S_IXOTH);
 
 	    if (bind(fd, (SA *) &servaddr, (socklen_t)sizeof(servaddr)) < 0) {

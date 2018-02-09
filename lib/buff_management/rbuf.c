@@ -45,6 +45,8 @@ int rbuf_mtx_writeto(struct io_params *iop)
 	struct rbuf_entry *w_ptr;
 	int i, r;
 
+	w_ptr = iop->rbuf_p;
+
 	/* CALL pthread_conf_signal() TO SYNCHRONIZE 
 	* LOCKING OF FIRST ENTRY IN LIST.  THIS THREAD 
 	* MUST GET THE LOCK FIRST.
@@ -59,7 +61,6 @@ int rbuf_mtx_writeto(struct io_params *iop)
 
 	/* SIGNAL WRITE THREAD */
 	pthread_cond_signal(&iop->readable);
-	w_ptr = iop->rbuf_p;
 
 	for (;;) {
 	    if ((i = read(iop->io_fd, w_ptr->line, RBUFF_SIZE)) > 0) {
@@ -141,6 +142,7 @@ int rbuf_rwlock_writeto(struct io_params *iop)
 	struct rbuf_entry *w_ptr;
 	int i, r;
 
+	w_ptr = iop->rbuf_p;
 	/* CALL pthread_conf_signal() TO SYNCHRONIZE 
 	* LOCKING OF FIRST ENTRY IN LIST.  THIS THREAD 
 	* MUST GET THE LOCK FIRST.
@@ -155,7 +157,6 @@ int rbuf_rwlock_writeto(struct io_params *iop)
 
 	/* SIGNAL WRITE THREAD */
 	pthread_cond_signal(&iop->readable);
-	w_ptr = iop->rbuf_p;
 
 	for (;;) {
 	    if ((i = read(iop->io_fd, w_ptr->line, RBUFF_SIZE)) > 0) {
