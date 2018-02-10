@@ -76,6 +76,7 @@ struct sock_param {
         T_SOCK		conn_type;
         T_SOCKIO	sockio;
         char		*ip;
+	int		listenfd;
         int     	port;
         char    	*hostname;
 	char		*sockpath;
@@ -174,6 +175,8 @@ void free_iop1(struct iop1_params *);
 void free_iop(struct io_params *);
 void free_sock_param(struct sock_param *);
 
+int unix_sockopen(struct io_params *);
+int net_sockopen(struct io_params *);
 
 
 #endif

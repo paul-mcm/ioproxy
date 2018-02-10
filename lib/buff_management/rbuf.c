@@ -77,7 +77,7 @@ int rbuf_mtx_writeto(struct io_params *iop)
 		sleep(3);
 		continue;
 	    } else {
-		if (read_error(iop, errno) == 0) {
+		if (io_error(iop, errno) == 0) {
 		    sleep(3);
 		    continue;
 		} else {
@@ -115,6 +115,7 @@ int rbuf_mtx_readfrom(struct io_params *iop)
 		    MTX_LOCK(&r_ptr->next->mtx_lock);
 		    MTX_UNLOCK(&r_ptr->mtx_lock);
 		    r_ptr = r_ptr->next;
+		    continue;
 		} else if (nw == 0) {
 		    sleep_unlocked(3, &r_ptr->mtx_lock);
 		    continue;
@@ -124,7 +125,7 @@ int rbuf_mtx_readfrom(struct io_params *iop)
 		    iop->bytes += nw;
 		    continue;
 		} else if (nw < 0) {
-		    if (write_error(iop, errno) == 0) {
+		    if (io_error(iop, errno) == 0) {
 			sleep_unlocked(3, &r_ptr->mtx_lock);
 			continue;
 		    } else {
@@ -173,7 +174,7 @@ int rbuf_rwlock_writeto(struct io_params *iop)
 		sleep(3);
 		continue;
 	    } else {
-		if (read_error(iop, errno) == 0) {
+		if (io_error(iop, errno) == 0) {
 		    sleep(3);
 		    continue;
 		} else {
@@ -212,6 +213,7 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 		    RD_LOCK(&r_ptr->next->rw_lock);
 		    RW_UNLOCK(&r_ptr->rw_lock);
 		    r_ptr = r_ptr->next;
+		    continue;
 		} else if (nw == 0) {
 		    RW_UNLOCK(&r_ptr->rw_lock);
 		    sleep(3);
@@ -224,7 +226,7 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 		    continue;
 		} else if (nw < 0) {
 		    /* SOME KNOWN ERROR; WORTH RETRYING? */
-		    if (write_error(iop, errno) == 0) {
+		    if (io_error(iop, errno) == 0) {
 			pthread_rwlock_unlock(&r_ptr->rw_lock);
 			sleep(3);
 			pthread_rwlock_rdlock(&r_ptr->rw_lock);
@@ -269,6 +271,7 @@ int rbuf_t3_readfrom(struct io_params *iop)
 		    MTX_UNLOCK(&r_ptr->mtx_lock);
 		    MTX_LOCK(&iop->fd_lock);
 		    r_ptr = r_ptr->next;
+		    continue;
 		} else if (nw == 0) {
 		    sleep_unlocked(3, &iop->fd_lock);
 		    continue;
@@ -278,7 +281,7 @@ int rbuf_t3_readfrom(struct io_params *iop)
 		    iop->bytes += nw;
 		    continue;
 		} else if (nw < 0) {
-		    if (write_error(iop, errno) == 0) {
+		    if (io_error(iop, errno) == 0) {
 			sleep_unlocked(3, &r_ptr->mtx_lock);
 			continue;
 		    } else {
@@ -343,30 +346,17 @@ void free_rbuf(struct rbuf_entry *rbuf)
 	}
 }
 
-int write_error(struct io_params *iop, int e)
+int io_error(struct io_params *iop, int e)
 {
 	if (e == EPIPE 		|| \
 	    e == ENETDOWN 	|| \
 	    e == EDESTADDRREQ 	|| \
 	    e == ENOTCONN) {
-		log_ret("write error - write end closed for %d", iop->io_fd);
+		log_ret("io error - remote end closed for %d: %s", \
+		    iop->io_fd, iop->path);
 		return 0;
 	    } else {
-		log_ret("unknown write error %d", e);
-		return 1;
-	    }
-}
-
-int read_error(struct io_params *iop, int e)
-{
-	if (e == EPIPE 		|| \
-	    e == ENETDOWN 	|| \
-	    e == EDESTADDRREQ 	|| \
-	    e == ENOTCONN) {
-		log_ret("read error - read end closed for %d", iop->io_fd);
-		return 0;
-	    } else {
-		log_ret("unknown write error %d", e);
+		log_ret("unknown io error %d %s", e, iop->path);
 		return 1;
 	    }
 }

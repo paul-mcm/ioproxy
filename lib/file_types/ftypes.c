@@ -17,6 +17,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -136,7 +137,7 @@ int open_file(struct io_params *iop)
 
 int open_unixsock(struct io_params *iop)
 {
-	int fd, r;
+	int len, fd, r;
 	struct sockaddr_un      servaddr;
 	mode_t                  old_umask;
 
@@ -146,6 +147,7 @@ int open_unixsock(struct io_params *iop)
         memset(&servaddr, 0, sizeof(servaddr));
         servaddr.sun_family = AF_LOCAL;
         strcpy(servaddr.sun_path, iop->sock_data->sockpath);
+	len = offsetof(struct sockaddr_un, sun_path) + strlen(iop->sock_data->sockpath);
 
 	if (iop->sock_data->conn_type == CONNECT) {
 	    if (connect(fd, (SA *) &servaddr, (socklen_t)sizeof(servaddr)) == 0)
@@ -161,7 +163,7 @@ int open_unixsock(struct io_params *iop)
 
 	    old_umask = umask(S_IXUSR|S_IXGRP|S_IXOTH);
 
-	    if (bind(fd, (SA *) &servaddr, (socklen_t)sizeof(servaddr)) < 0) {
+	    if (bind(fd, (SA *) &servaddr, len) < 0) {
 		(void)umask(old_umask);
 		log_syserr("Error binding to socket:", errno);
 	    }
