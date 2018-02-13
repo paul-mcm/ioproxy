@@ -300,16 +300,6 @@ int do_connect(int fd, struct sockaddr *saddr, int l)
 	}
 }
 
-int open_tcpsock(struct io_params *iop)
-{
-	return 0;
-}
-
-int open_udpsock(struct io_params *iop)
-{
-	return 0;
-}
-
 int set_flags(struct io_params *iop)
 {
 	int f;

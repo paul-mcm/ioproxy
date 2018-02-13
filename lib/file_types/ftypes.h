@@ -40,15 +40,12 @@ int open_desc(struct io_params *);
 
 int open_fifo(struct io_params *);
 int open_file(struct io_params *);
-int open_tcpsock(struct io_params *);
-int open_udpsock(struct io_params *);
-int open_unixsock(struct io_params *);
+int open_sock(struct io_params *);
 
 int set_flags(struct io_params *);
 
 int call_bind(struct io_params *);
 int call_accept(struct io_params *);
 int call_connect(struct io_params *);
-int open_sock(struct io_params *);
 
 int do_connect(int, struct sockaddr *, int);
