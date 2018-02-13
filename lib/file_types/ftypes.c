@@ -48,7 +48,7 @@ int open_desc(struct io_params *iop)
 	    } else if (iop->desc_type == STDOUT) {
 		fd = STDOUT_FILENO;
 	    } else if (iop->desc_type == TCP_SOCK) {
-		fd = open_udpsock(iop);
+		fd = open_sock(iop);
 	    } else if (iop->desc_type == UDP_SOCK) {
 		fd = open_sock(iop);
 	    } else {
@@ -92,7 +92,6 @@ int open_fifo(struct io_params *iop)
 		    sleep(5);
 		    continue;
 		} else {
-		    printf("error here\n");
 		    log_syserr("open(2) error - %s", iop->path);
 		}
 	    } else {
@@ -151,38 +150,53 @@ int open_sock(struct io_params *iop)
 	    } else {
 		return call_connect(iop);
 	    }
+	} else if (iop->desc_type == TCP_SOCK) {
+	    if (iop->sock_data->conn_type == LISTEN) {
+		if ((iop->sock_data->listenfd = call_bind(iop)) < 0)
+		    log_msg("error binding socket");
+
+		return call_accept(iop);
+	    } else {
+		return call_connect(iop);
+	    }
+	} else if (iop->desc_type == UDP_SOCK) {	
+		printf("IS UDP\n");
 	}
-}
-
-
+}	
 
 int call_bind(struct io_params *iop)
 {
 	int len, fd, r;
-	struct sockaddr_un      servaddr;
+	struct sockaddr_un      unix_saddr;
+	struct sockaddr_in      net_saddr;
 	mode_t                  old_umask;
 
-        memset(&servaddr, 0, sizeof(servaddr));
+        memset(&unix_saddr, 0, sizeof(struct sockaddr_un));
+        memset(&net_saddr, 0, sizeof(struct sockaddr_in));
 
 	if (iop->desc_type == UNIX_SOCK) {
 
-	    servaddr.sun_family = AF_LOCAL;
-	    strcpy(servaddr.sun_path, iop->sock_data->sockpath);
-	    len = offsetof(struct sockaddr_un, sun_path) + strlen(iop->sock_data->sockpath);
+	    unix_saddr.sun_family = AF_LOCAL;
+	    strcpy(unix_saddr.sun_path, iop->path);
+	    len = offsetof(struct sockaddr_un, sun_path) + strlen(iop->path);
 
-	    if ((fd = socket(AF_LOCAL, SOCK_STREAM, 0)) < 0)
-		log_syserr("Failed to create listening socket:", errno);
+	    if (iop->sock_data->sockio == STREAM) 
+		if ((fd = socket(AF_LOCAL, SOCK_STREAM, 0)) < 0)
+		    log_syserr("Failed to create listening socket:", errno);
+	    else
+		if ((fd = socket(AF_LOCAL, SOCK_DGRAM, 0)) < 0)
+		    log_syserr("Failed to create listening socket:", errno);
 
-/*	    if ((r = connect(fd, (SA *) &servaddr, (socklen_t)sizeof(servaddr))) == 0) {
-*		log_die("Error: listing socket already listening");
-*	    } else if (r == -1 && errno != ENOENT) {
-*		if (unlink(iop->path) != 0)
-*			log_syserr("Failed to unlink unix socket: %s %s", iop->path, strerror(errno));
-*	    }
-*/
+	    if ((r = connect(fd, (SA *) &unix_saddr, (socklen_t)sizeof(unix_saddr))) == 0) {
+		log_die("Error: listing socket already listening");
+	    } else if (r == -1 && errno != ENOENT) {
+		if (unlink(iop->path) != 0)
+			log_syserr("Failed to unlink unix socket: %s %s", iop->path, strerror(errno));
+	    }
+
 	    old_umask = umask(S_IXUSR|S_IXGRP|S_IXOTH);
 
-	    if (bind(fd, (SA *) &servaddr, len) < 0) {
+	    if (bind(fd, (SA *) &unix_saddr, len) < 0) {
 		(void)umask(old_umask);
 		log_syserr("Error binding to socket:", errno);
 	    }
@@ -196,6 +210,35 @@ int call_bind(struct io_params *iop)
 
 	    if (listen(fd, LISTENQ) < 0)
 		log_syserr("Call to listen call failed:", errno);
+
+	} else if (iop->desc_type == TCP_SOCK) {
+	    bzero(&net_saddr, sizeof(net_saddr));
+	    net_saddr.sin_family = AF_INET;
+	    net_saddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	    net_saddr.sin_port = htons(iop->sock_data->port);
+
+	    fd = socket(AF_INET, SOCK_STREAM, 0);
+
+	    if (bind(fd, (SA *) &net_saddr, sizeof(net_saddr)) < 0)
+		log_syserr("bind() error: %s", errno);
+
+	    if (listen(fd, 1) != 0)
+		log_syserr("listen() error: %s", errno);
+
+	} else if (iop->desc_type == UDP_SOCK) {
+	    bzero(&net_saddr, sizeof(net_saddr));
+	    net_saddr.sin_family = AF_INET;
+	    net_saddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	    net_saddr.sin_port = htons(iop->sock_data->port);
+
+	    fd = socket(AF_INET, SOCK_DGRAM, 0);
+
+	    if (bind(fd, (SA *) &net_saddr, sizeof(net_saddr)) < 0)
+		log_syserr("bind() error: %s", errno);
+
+	    if (listen(fd, 1) != 0)
+		log_syserr("listen() error: %s", errno);
+
 	}
 
 	return fd;
@@ -207,9 +250,6 @@ int call_accept(struct io_params *iop)
 	int			sd;
 	struct sockaddr_un 	cliaddr;
 	int			clilen;
-
-
-	printf("HERE\n");
 
 	if (iop->desc_type == UNIX_SOCK) {	
 	    clilen = offsetof(struct sockaddr_un, sun_path) + \
@@ -231,7 +271,7 @@ int call_accept(struct io_params *iop)
 int call_connect(struct io_params *iop)
 {
 	struct sockaddr_un	unix_saddr;
-	struct sockaddr		net_saddr;
+	struct sockaddr_in	net_saddr;
 	int			len;
 	int			fd;	
 
@@ -241,10 +281,42 @@ int call_connect(struct io_params *iop)
 	    unix_saddr.sun_family = AF_UNIX;
 	    strlcpy(unix_saddr.sun_path, iop->path, sizeof(unix_saddr.sun_path));
 	    len = offsetof(struct sockaddr_un, sun_path) + strlen(iop->path);
-	}
 
-	if (connect(fd, (SA *) &unix_saddr, (socklen_t)sizeof(unix_saddr)) != 0) {
-	    log_syserr("connect() failed: %s %d", iop->path, errno);
+	    for (;;) {
+		if (connect(fd, (SA *)&unix_saddr, (socklen_t)sizeof(unix_saddr)) != 0) {
+		    if (errno == ENOENT || errno == ECONNREFUSED) {
+			log_ret("connect() failed for %s", iop->path);
+			sleep(2);
+			continue;
+		    } else {
+			log_syserr("connect() error for %s", iop->path);
+		    }
+		} else {
+		    break;
+		}
+	    }
+	} else if (iop->desc_type == TCP_SOCK) {
+	    fd = socket(AF_INET, SOCK_STREAM, 0);
+	    bzero(&net_saddr, sizeof(net_saddr));
+	    net_saddr.sin_family = AF_INET;
+	    net_saddr.sin_port = htons(iop->sock_data->port);
+
+	    if (iop->sock_data->ip != NULL)
+		inet_pton(AF_INET, iop->sock_data->ip, &net_saddr.sin_addr);
+
+	    for (;;) {
+		if (connect(fd, (SA *) &net_saddr, sizeof(net_saddr)) != 0) {
+		    if (errno == ENOENT) {
+			log_ret("connect() failed - no listeng socket");
+			sleep(2);
+			continue;
+		    } else {
+			log_syserr("connect error: %s", errno);
+		    }
+		} else {
+                   break;
+		}
+	    }
 	}
 
 	return fd;
@@ -274,31 +346,3 @@ int set_flags(struct io_params *iop)
 
 	return f;
 }
-
-		
-/*
-*int open_local_desc(char *n, int t) {	
-*
-*	
-*	  PASSED A CONFIG PATHNAME AND
-*	  TYPE AS ARG. OPEN APPROPRIATE
-*	  FILE TYPE
-*
-*
-*	if (t == STDOUT) {
-*		return STDOUT_REG_FILENO;
-*
-*	} else if (t == FIFO) {
-*		return open_fifo(n);
-*
-*	} else if (t == REG_FILE) {
-*		return open_file(n);
-*			
-*	} else if (t == UNIX_SOCK) {
-*		printf("is sockct\n");
-*	} else { 
-*		printf("can't us file type\n");
-*		return -1;
-*	}	
-*}
-*/

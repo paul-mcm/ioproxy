@@ -314,7 +314,7 @@ void print_config_params(struct io_params *iop)
 	if (is_sock(iop->desc_type)) {
 		printf("conn_type: %s\n", 	conn_type[iop->sock_data->conn_type]);
 		printf("sockio: %s\n", 		sockio[iop->sock_data->sockio]);
-		printf("ip: %d\n", 		iop->sock_data->ip != 0 ? iop->sock_data->ip : NULL);
+		printf("ip: %s\n", 		iop->sock_data->ip != 0 ? iop->sock_data->ip : NULL);
 		printf("port: %d\n", 		iop->sock_data->port != 0 ? iop->sock_data->port : 0);
 		if (iop->sock_data->hostname != NULL) 
 			printf("hostname: %s\n", iop->sock_data->hostname);

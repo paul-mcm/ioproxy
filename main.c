@@ -246,7 +246,6 @@ void *io_t3_thread(void *arg)
 	for (;;) {
 	    if (*iop->iofd_p < 0) {
 		pthread_mutex_lock(&iop->fd_lock);
-		printf("Got lock: %s\n", iop->path);
 
 		if (*iop->iofd_p < 0) {
 		    printf("opening fd for %s\n", iop->path);
