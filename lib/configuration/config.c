@@ -519,3 +519,11 @@ void free_iop(struct io_params *iop)
 	free(iop->path);
 	free(iop);
 }
+
+int validate_iop(struct io_params *iop)
+{
+
+	if (iop->desc_type == UDP_SOCK && iop->sock_data->conn_type == LISTEN)
+	   log_die("Config error: No udp listening sockets");
+
+}

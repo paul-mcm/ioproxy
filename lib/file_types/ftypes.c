@@ -141,26 +141,13 @@ int open_sock(struct io_params *iop)
         /* RETURN INT FOR io_fd */
 	int fd;
 	
-	if (iop->desc_type == UNIX_SOCK) {
-	    if (iop->sock_data->conn_type == LISTEN) {
-		if ((iop->sock_data->listenfd = call_bind(iop)) < 0)
-		    log_msg("error binding socket");
+	if (iop->sock_data->conn_type == LISTEN) {
+	    if ((iop->sock_data->listenfd = call_bind(iop)) < 0)
+		log_msg("error binding socket");
 
-		return call_accept(iop);
-	    } else {
-		return call_connect(iop);
-	    }
-	} else if (iop->desc_type == TCP_SOCK) {
-	    if (iop->sock_data->conn_type == LISTEN) {
-		if ((iop->sock_data->listenfd = call_bind(iop)) < 0)
-		    log_msg("error binding socket");
-
-		return call_accept(iop);
-	    } else {
-		return call_connect(iop);
-	    }
-	} else if (iop->desc_type == UDP_SOCK) {	
-		printf("IS UDP\n");
+	    return call_accept(iop);
+	} else {
+	    return call_connect(iop);
 	}
 }	
 
@@ -212,7 +199,6 @@ int call_bind(struct io_params *iop)
 		log_syserr("Call to listen call failed:", errno);
 
 	} else if (iop->desc_type == TCP_SOCK) {
-	    bzero(&net_saddr, sizeof(net_saddr));
 	    net_saddr.sin_family = AF_INET;
 	    net_saddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	    net_saddr.sin_port = htons(iop->sock_data->port);
@@ -225,25 +211,10 @@ int call_bind(struct io_params *iop)
 	    if (listen(fd, 1) != 0)
 		log_syserr("listen() error: %s", errno);
 
-	} else if (iop->desc_type == UDP_SOCK) {
-	    bzero(&net_saddr, sizeof(net_saddr));
-	    net_saddr.sin_family = AF_INET;
-	    net_saddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	    net_saddr.sin_port = htons(iop->sock_data->port);
-
-	    fd = socket(AF_INET, SOCK_DGRAM, 0);
-
-	    if (bind(fd, (SA *) &net_saddr, sizeof(net_saddr)) < 0)
-		log_syserr("bind() error: %s", errno);
-
-	    if (listen(fd, 1) != 0)
-		log_syserr("listen() error: %s", errno);
-
 	}
 
 	return fd;
 }
-
 
 int call_accept(struct io_params *iop)
 {
@@ -272,9 +243,8 @@ int call_connect(struct io_params *iop)
 {
 	struct sockaddr_un	unix_saddr;
 	struct sockaddr_in	net_saddr;
-	int			len;
-	int			fd;	
-
+	int			len, fd;
+	
 	if (iop->desc_type == UNIX_SOCK) {
 	    fd = socket(AF_UNIX, SOCK_STREAM, 0);
 	    bzero(&unix_saddr, sizeof(unix_saddr));
@@ -282,44 +252,52 @@ int call_connect(struct io_params *iop)
 	    strlcpy(unix_saddr.sun_path, iop->path, sizeof(unix_saddr.sun_path));
 	    len = offsetof(struct sockaddr_un, sun_path) + strlen(iop->path);
 
-	    for (;;) {
-		if (connect(fd, (SA *)&unix_saddr, (socklen_t)sizeof(unix_saddr)) != 0) {
-		    if (errno == ENOENT || errno == ECONNREFUSED) {
-			log_ret("connect() failed for %s", iop->path);
-			sleep(2);
-			continue;
-		    } else {
-			log_syserr("connect() error for %s", iop->path);
-		    }
-		} else {
-		    break;
-		}
-	    }
+	    return do_connect(fd, (SA *)&unix_saddr, len));
+
 	} else if (iop->desc_type == TCP_SOCK) {
 	    fd = socket(AF_INET, SOCK_STREAM, 0);
 	    bzero(&net_saddr, sizeof(net_saddr));
 	    net_saddr.sin_family = AF_INET;
+	    net_saddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	    net_saddr.sin_port = htons(iop->sock_data->port);
 
 	    if (iop->sock_data->ip != NULL)
 		inet_pton(AF_INET, iop->sock_data->ip, &net_saddr.sin_addr);
 
-	    for (;;) {
-		if (connect(fd, (SA *) &net_saddr, sizeof(net_saddr)) != 0) {
-		    if (errno == ENOENT) {
-			log_ret("connect() failed - no listeng socket");
-			sleep(2);
-			continue;
-		    } else {
-			log_syserr("connect error: %s", errno);
-		    }
+	    return do_connect(fd, (SA *)&net_saddr, sizeof(net_saddr));
+
+	} else if (iop->desc_type == UDP_SOCK) {
+	    fd = socket(AF_INET, SOCK_DGRAM, 0);
+	    bzero(&net_saddr, sizeof(net_saddr));
+	    net_saddr.sin_family = AF_INET;
+	    net_saddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	    net_saddr.sin_port = htons(iop->sock_data->port);
+
+	    if (iop->sock_data->ip != NULL)
+		inet_pton(AF_INET, iop->sock_data->ip, &net_saddr.sin_addr);
+
+	    do_connect(fd, (SA *)&net_saddr, sizeof(net_saddr));
+	}
+	return fd;
+}
+
+int do_connect(int fd, struct sockaddr *saddr, int l)
+{
+	for (;;) {
+	    if (connect(fd, (SA *)saddr, l) != 0) {
+		if (errno == ENOENT || errno == ENETDOWN || errno == ETIMEDOUT || \
+		    errno == ECONNREFUSED) {
+		    log_ret("connect() failed - no listeng socket");
+		    sleep(2);
+		    continue;
 		} else {
-                   break;
+		   log_syserr("connect error: %s", errno);
 		}
+	    } else {
+		return fd;
+		break;
 	    }
 	}
-
-	return fd;
 }
 
 int open_tcpsock(struct io_params *iop)

@@ -116,13 +116,13 @@ int rbuf_mtx_readfrom(struct io_params *iop)
 		    MTX_UNLOCK(&r_ptr->mtx_lock);
 		    r_ptr = r_ptr->next;
 		    continue;
-		} else if (nw == 0) {
-		    sleep_unlocked(3, &r_ptr->mtx_lock);
-		    continue;
-		} else if (nw < r_ptr->len) {
+		} else if (nw < r_ptr->len && nw > 0) {
 		    nleft -= nw;
 		    lptr += nw;
 		    iop->bytes += nw;
+		    continue;
+		} else if (nw == 0) {
+		    sleep_unlocked(3, &r_ptr->mtx_lock);
 		    continue;
 		} else if (nw < 0) {
 		    if (io_error(iop, errno) == 0) {
@@ -131,6 +131,7 @@ int rbuf_mtx_readfrom(struct io_params *iop)
 		    } else {
 			/* UNKOWN ERROR; * ASSUME DESC INVALID */
 			MTX_UNLOCK(&r_ptr->mtx_lock);
+			log_ret("write() error", errno);
 			return -1;
 		    }
 		}
@@ -214,15 +215,15 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 		    RW_UNLOCK(&r_ptr->rw_lock);
 		    r_ptr = r_ptr->next;
 		    continue;
+		} else if (nw < r_ptr->len && nw > 0) {
+		    nleft -= nw;
+		    lptr += nw;
+		    iop->bytes += nw;
+		    continue;
 		} else if (nw == 0) {
 		    RW_UNLOCK(&r_ptr->rw_lock);
 		    sleep(3);
 		    RD_LOCK(&r_ptr->rw_lock);
-		    continue;
-		} else if (nw < r_ptr->len) {
-		    nleft -= nw;
-		    lptr += nw;
-		    iop->bytes += nw;
 		    continue;
 		} else if (nw < 0) {
 		    /* SOME KNOWN ERROR; WORTH RETRYING? */
@@ -272,13 +273,13 @@ int rbuf_t3_readfrom(struct io_params *iop)
 		    MTX_LOCK(&iop->fd_lock);
 		    r_ptr = r_ptr->next;
 		    continue;
-		} else if (nw == 0) {
-		    sleep_unlocked(3, &iop->fd_lock);
-		    continue;
-		} else if (nw < r_ptr->len) {
+		} else if (nw < r_ptr->len && nw > 0) {
 		    nleft -= nw;
 		    lptr += nw;
 		    iop->bytes += nw;
+		    continue;
+		} else if (nw == 0) {
+		    sleep_unlocked(3, &iop->fd_lock);
 		    continue;
 		} else if (nw < 0) {
 		    if (io_error(iop, errno) == 0) {

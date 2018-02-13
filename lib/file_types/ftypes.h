@@ -50,3 +50,5 @@ int call_bind(struct io_params *);
 int call_accept(struct io_params *);
 int call_connect(struct io_params *);
 int open_sock(struct io_params *);
+
+int do_connect(int, struct sockaddr *, int);

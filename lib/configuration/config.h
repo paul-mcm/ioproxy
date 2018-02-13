@@ -178,5 +178,6 @@ void free_sock_param(struct sock_param *);
 int unix_sockopen(struct io_params *);
 int net_sockopen(struct io_params *);
 
+int validate_iop(struct io_params *);
 
 #endif
