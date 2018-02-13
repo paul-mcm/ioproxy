@@ -292,22 +292,13 @@ void *io_thread(void *arg)
 	pthread_cleanup_push(release_mtx, iop);
 
 	for (;;) {
-		if (iop->io_fd < 0) {
-			printf("opening fd for %s\n", iop->path);
-			if ((iop->io_fd = open_desc(iop)) < 0) {
-			    printf("open error. Sleeping...\n");
-			    sleep(10);
-			    continue;
-			}
-		
-			if (is_sock(iop->desc_type))
-			    if (iop->desc_type == UNIX_SOCK)
-				unix_sockopen(iop);
-			    else
-				net_sockopen(iop);
+	    if (iop->io_fd < 0) {
+		printf("opening fd for %s\n", iop->path);
+		if ((iop->io_fd = open_desc(iop)) < 0) {
+		    printf("open error. Sleeping...\n");
+		    sleep(10);
+		    continue;
 		}
-
-		printf("FD for %s %d\n", iop->path, iop->io_fd);
 
 		/* BLOCK */
 		if (is_src(iop))
@@ -327,19 +318,12 @@ void *io_thread(void *arg)
 
 			break;
 		}
+	    }
 	}
 
 	printf("io_thread returning for %s\n", iop->path);
 	pthread_exit((void *)0);
 	pthread_cleanup_pop(0);
-}
-
-int unix_sockopen(struct io_params *iop)
-{
-}
-
-int net_sockopen(struct io_params *iop)
-{
 }
 
 void release_mtx(void *arg)

@@ -42,15 +42,15 @@ int open_desc(struct io_params *iop)
 	    } else if (iop->desc_type == REG_FILE) {
 		fd = open_file(iop);
 	    } else if (iop->desc_type == UNIX_SOCK) {
-		fd = open_unixsock(iop);
+		fd = open_sock(iop);
 	    } else if (iop->desc_type == STDIN) {
 		fd = STDIN_FILENO;
 	    } else if (iop->desc_type == STDOUT) {
 		fd = STDOUT_FILENO;
 	    } else if (iop->desc_type == TCP_SOCK) {
-		fd = open_tcpsock(iop);
-	    } else if (iop->desc_type == UDP_SOCK) {
 		fd = open_udpsock(iop);
+	    } else if (iop->desc_type == UDP_SOCK) {
+		fd = open_sock(iop);
 	    } else {
 		printf("Unknown type %d\n", iop->desc_type);
 		return -1;
@@ -83,7 +83,7 @@ int open_fifo(struct io_params *iop)
 	    }
 	}
 
-/*	oflags |= O_NONBLOCK; */
+	oflags |= O_NONBLOCK;
 
 	for (;;) {
 	    if ((fd = open(iop->path, oflags)) < 0) {
@@ -135,32 +135,51 @@ int open_file(struct io_params *iop)
 	return fd;
 }
 
-int open_unixsock(struct io_params *iop)
+int open_sock(struct io_params *iop)
+{
+	/* LOCAL? NETWORK? */
+	/* LISTEN? CONNECT? */
+        /* RETURN INT FOR io_fd */
+	int fd;
+	
+	if (iop->desc_type == UNIX_SOCK) {
+	    if (iop->sock_data->conn_type == LISTEN) {
+		if ((iop->sock_data->listenfd = call_bind(iop)) < 0)
+		    log_msg("error binding socket");
+
+		return call_accept(iop);
+	    } else {
+		return call_connect(iop);
+	    }
+	}
+}
+
+
+
+int call_bind(struct io_params *iop)
 {
 	int len, fd, r;
 	struct sockaddr_un      servaddr;
 	mode_t                  old_umask;
 
-	if ((fd = socket(AF_LOCAL, SOCK_STREAM, 0)) < 0)
-            log_syserr("Failed to create listening socket:", errno);
-
         memset(&servaddr, 0, sizeof(servaddr));
-        servaddr.sun_family = AF_LOCAL;
-        strcpy(servaddr.sun_path, iop->sock_data->sockpath);
-	len = offsetof(struct sockaddr_un, sun_path) + strlen(iop->sock_data->sockpath);
 
-	if (iop->sock_data->conn_type == CONNECT) {
-	    if (connect(fd, (SA *) &servaddr, (socklen_t)sizeof(servaddr)) == 0)
-		log_syserr("Error connecting to socket %s: %s\n", iop->path, strerror(errno));
+	if (iop->desc_type == UNIX_SOCK) {
 
-	} else if (iop->sock_data->conn_type == LISTEN) {
-	    if ((r = connect(fd, (SA *) &servaddr, (socklen_t)sizeof(servaddr))) == 0) {
-		log_die("Error: listing socket already listening");
-	    } else if (r == -1 && errno != ENOENT) {
-		if (unlink(iop->path) != 0)
-			log_syserr("Failed to unlink unix socket: %s %s", iop->path, strerror(errno));
-	    }
+	    servaddr.sun_family = AF_LOCAL;
+	    strcpy(servaddr.sun_path, iop->sock_data->sockpath);
+	    len = offsetof(struct sockaddr_un, sun_path) + strlen(iop->sock_data->sockpath);
 
+	    if ((fd = socket(AF_LOCAL, SOCK_STREAM, 0)) < 0)
+		log_syserr("Failed to create listening socket:", errno);
+
+/*	    if ((r = connect(fd, (SA *) &servaddr, (socklen_t)sizeof(servaddr))) == 0) {
+*		log_die("Error: listing socket already listening");
+*	    } else if (r == -1 && errno != ENOENT) {
+*		if (unlink(iop->path) != 0)
+*			log_syserr("Failed to unlink unix socket: %s %s", iop->path, strerror(errno));
+*	    }
+*/
 	    old_umask = umask(S_IXUSR|S_IXGRP|S_IXOTH);
 
 	    if (bind(fd, (SA *) &servaddr, len) < 0) {
@@ -178,9 +197,58 @@ int open_unixsock(struct io_params *iop)
 	    if (listen(fd, LISTENQ) < 0)
 		log_syserr("Call to listen call failed:", errno);
 	}
+
 	return fd;
 }
 
+
+int call_accept(struct io_params *iop)
+{
+	int			sd;
+	struct sockaddr_un 	cliaddr;
+	int			clilen;
+
+
+	printf("HERE\n");
+
+	if (iop->desc_type == UNIX_SOCK) {	
+	    clilen = offsetof(struct sockaddr_un, sun_path) + \
+		strlen(iop->sock_data->sockpath);
+	}
+
+	if ((sd = accept(iop->sock_data->listenfd, (SA *) &cliaddr, &clilen)) < 0) {
+	    if (errno == ECONNABORTED) {
+		log_ret("accept() error: %s", strerror(errno));
+		return -1;
+	    } else {
+		log_syserr("fatal accept() error: %s", strerror(errno));
+		return -1;
+            }
+        }
+	return sd;
+}
+
+int call_connect(struct io_params *iop)
+{
+	struct sockaddr_un	unix_saddr;
+	struct sockaddr		net_saddr;
+	int			len;
+	int			fd;	
+
+	if (iop->desc_type == UNIX_SOCK) {
+	    fd = socket(AF_UNIX, SOCK_STREAM, 0);
+	    bzero(&unix_saddr, sizeof(unix_saddr));
+	    unix_saddr.sun_family = AF_UNIX;
+	    strlcpy(unix_saddr.sun_path, iop->path, sizeof(unix_saddr.sun_path));
+	    len = offsetof(struct sockaddr_un, sun_path) + strlen(iop->path);
+	}
+
+	if (connect(fd, (SA *) &unix_saddr, (socklen_t)sizeof(unix_saddr)) != 0) {
+	    log_syserr("connect() failed: %s %d", iop->path, errno);
+	}
+
+	return fd;
+}
 
 int open_tcpsock(struct io_params *iop)
 {

@@ -31,6 +31,9 @@
 #include <syslog.h>
 #include <unistd.h>
 
+#include <sys/socket.h>
+#include <sys/un.h>
+
 #include "../configuration/config.h"
 
 int open_desc(struct io_params *);
@@ -43,6 +46,8 @@ int open_unixsock(struct io_params *);
 
 int set_flags(struct io_params *);
 
-
+int call_bind(struct io_params *);
+int call_accept(struct io_params *);
+int call_connect(struct io_params *);
 
 /* int open_local_desc(char *, int); */
