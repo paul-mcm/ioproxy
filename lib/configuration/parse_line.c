@@ -103,6 +103,25 @@ int fill(char *f, char *v, struct io_params *iop)
  	else if (strcasecmp((f + 4), "port") == 0) {
 		iop->sock_data->port = malloc(strlen(v) + 1);
 		strncpy(iop->sock_data->port, v, strlen(v) + 1);
+	} else if (strcasecmp((f + 4), "tls") == 0)
+		iop->sock_data->tls = TRUE;
+	else if (strcasecmp((f + 4), "cacert") == 0) {
+		iop->sock_data->cacert_path = malloc(strlen(v) + 1);
+		strncpy(iop->sock_data->cacert_path, v, strlen(v));
+	} else if (strcasecmp((f + 4), "cacertdir") == 0) {
+		iop->sock_data->cacert_dirpath = malloc(strlen(v) + 1);
+		strncpy(iop->sock_data->cacert_dirpath, v, strlen(v));
+	} else if (strcasecmp((f + 4), "reqcrt") == 0) {
+		if (strcasecmp(v, "demand") == 0)
+		    iop->sock_data->cert_strtgy = DEMAND;
+		else if (strcasecmp(v, "never") == 0)
+		    iop->sock_data->cert_strtgy = NEVER;
+		else if (strcasecmp(v, "try") == 0)
+		    iop->sock_data->cert_strtgy = TRY;
+		else if (strcasecmp(v, "allow") == 0)
+		    iop->sock_data->cert_strtgy = ALLOW;
+		else
+		    log_die("Bad value for 'reqcrt' param");
 	} else if (strcasecmp((f + 4), "bufsz") == 0) {
 		iop->buf_sz = strtonum(v, 1, 16384, &s);
 		if (s != NULL) {

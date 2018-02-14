@@ -21,6 +21,7 @@ const char *io_drn[] = { "SRC", "DST" };
 const char *io_types[] = {"TYPE_1", "TYPE_2", "TYPE_3"};
 const char *conn_type[] = { "CONNECT", "LISTEN" };
 const char *sockio[] = { "DGRAM", "STREAM" };
+const char *cert_strtgy[] = {"DEMAND", "NEVER", "TRY", "ALLOW"};
 
 int read_config(struct all_cfg_list *all)
 {
@@ -289,6 +290,8 @@ int show_all_configs(struct all_cfg_list *all)
 
 void print_config_params(struct io_params *iop)
 {
+	struct sock_param *sp;
+
 	printf("io_drn:\t\t%s\n", io_drn[iop->io_drn]);
 	printf("desc_type:\t\t%s\n", desc_types[iop->desc_type]);
 	printf("rbuf_p addr: %p\n", iop->rbuf_p);
@@ -310,15 +313,25 @@ void print_config_params(struct io_params *iop)
 	
 
 	if (is_sock(iop->desc_type)) {
-		printf("conn_type: %s\n", 	conn_type[iop->sock_data->conn_type]);
-		printf("sockio: %s\n", 		sockio[iop->sock_data->sockio]);
-		printf("ip: %s\n", 		iop->sock_data->ip != 0 ? iop->sock_data->ip : NULL);
-		printf("port: %s\n", 		iop->sock_data->port != 0 ? iop->sock_data->port : 0);
-		if (iop->sock_data->hostname != NULL) 
-			printf("hostname: %s\n", iop->sock_data->hostname);
+		sp = iop->sock_data;
 
-		if (iop->sock_data->sockpath != NULL) 
-			printf("sockpath: %s\n", iop->sock_data->sockpath);
+		printf("conn_type: %s\n", 	conn_type[sp->conn_type]);
+		printf("sockio: %s\n", 		sockio[sp->sockio]);
+		printf("ip: %s\n", 		sp->ip != 0 ? sp->ip : NULL);
+		printf("port: %s\n", 		sp->port != 0 ? sp->port : 0);
+		if (iop->sock_data->hostname != NULL)
+			printf("hostname: %s\n", sp->hostname);
+
+		if (sp->sockpath != NULL)
+			printf("sockpath: %s\n", sp->sockpath);
+		if (sp->tls == TRUE) {
+		    printf("tls = TRUE\n");
+		    if (sp->cacert_path != NULL)
+			printf("cacertpath: %s\n", sp->cacert_path);
+		    if (sp->cacert_dirpath != NULL)
+			printf("cacertdir: %s\n", sp->cacert_dirpath);
+		    printf("cert_strtgy: %s\n", cert_strtgy[sp->cert_strtgy]);
+		}
 	}
 
 	printf("path: %s\n", iop->path != NULL ? iop->path : NULL);	

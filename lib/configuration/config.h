@@ -70,14 +70,25 @@ typedef enum {
 	STREAM = 4,
 } T_SOCKIO;
 
+typedef enum {
+	DEMAND,
+	NEVER,
+	TRY,
+	ALLOW,
+} T_CERTSTRTGY;
+
 struct sock_param {
         T_SOCK		conn_type;
         T_SOCKIO	sockio;
+	int		tls;
         char		*ip;
 	int		listenfd;
         char	     	*port;
         char    	*hostname;
 	char		*sockpath;
+	char		*cacert_path;
+	char		*cacert_dirpath;
+	T_CERTSTRTGY	cert_strtgy;
 };
 
 /* s - shared
@@ -163,11 +174,11 @@ T_DATA set_io_dir(char *);
 
 int line_byte_cnt(FILE *);
 
-struct io_cfg *io_cfg_alloc(void);
-struct iop0_params *iop0_alloc(void);
-struct iop1_params *iop1_alloc(void);
-struct io_params *iop_alloc(void);
-struct sock_param *sock_param_alloc(void);
+struct io_cfg		*io_cfg_alloc(void);
+struct iop0_params	*iop0_alloc(void);
+struct iop1_params	*iop1_alloc(void);
+struct io_params	*iop_alloc(void);
+struct sock_param	*sock_param_alloc(void);
 
 void free_iop0(struct iop0_params *);
 void free_iop1(struct iop1_params *);
