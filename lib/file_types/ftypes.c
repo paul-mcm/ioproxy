@@ -52,7 +52,7 @@ int open_desc(struct io_params *iop)
 	    } else if (iop->desc_type == UDP_SOCK) {
 		fd = open_sock(iop);
 	    } else {
-		printf("Unknown type %d\n", iop->desc_type);
+		log_msg("Unknown type %d", iop->desc_type);
 		return -1;
 	    }
 	
@@ -293,24 +293,23 @@ int do_netconnect(struct io_params *iop)
 
 	for (;;) {
 	    if ((r = getaddrinfo(iop->sock_data->hostname, iop->sock_data->port, &hints, &res)) != 0) { 
-		printf("ERROR: %s\n", gai_strerror(r));
-		exit(-1);
+		log_msg("getaddrinfo() error: %s", gai_strerror(r));
+		exit(-1); /* XXX REALLY */
 	    } else {
 		ressave = res;
 	    }
 
 	    do {
 		if ((fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0) {
-		    printf("socket() error: %s\n", strerror(errno));
+		    log_ret("socket() error");
 		    continue;
 		}
 
 		if (connect(fd, res->ai_addr, res->ai_addrlen) != 0) {
-		    printf("connect() error: %d %s\n", errno, strerror(errno));
+		    log_ret("connect() error");
 		    close(fd);
 		    continue;
 		} else {
-		    printf("Success\n");
 		    break;
 		}
 	    } while ((res = res->ai_next) != NULL);
