@@ -118,7 +118,8 @@ struct io_params {
         char			*path;
 	int			nonblock;
 	int			*listready;	/* s */
-	long			bytes;
+	unsigned long		bytes;
+	unsigned long		io_cnt;
         struct sock_param	*sock_data;	/* MAY BE NULL */
 };
 
