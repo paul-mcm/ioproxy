@@ -58,17 +58,14 @@ int main(int argc, char *argv[])
 
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
 		if (pthread_create(&tid, &dflt_attrs, iocfg_manager, (void *)iocfg) != 0)
-                	printf("error pthread_create: %s", strerror(errno));
+                	log_ret("error pthread_create: ");
 
 	if (pthread_create(&sigterm_tid, &dflt_attrs, sigterm_thrd, NULL) != 0)
-		printf("error pthread_create: %s", strerror(errno));
+		log_die("error pthread_create()");
 
 	/* BLOCK */
 	pthread_join(sigterm_tid, NULL);
 	terminate();
-
-	printf("Calling exit after sleep(20)\n");
-	sleep(20);
 	exit(0);
 }
 
@@ -167,7 +164,7 @@ void iop_setup(struct io_cfg *iocfg)
 
 	    newiop1->iop->fd_lock = malloc(sizeof(pthread_mutex_t));
 	    if (pthread_mutex_init(&newiop1->iop->fd_lock, NULL) != 0) {
-                printf("fd_lock init error\n");
+                log_die("fd_lock init error\n");
                 exit(-1);
             }
 
@@ -192,7 +189,7 @@ void *iocfg_manager(void *arg)
 
 	LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths) {
 	    if (pthread_create(&iop0->iop->tid, &dflt_attrs, iop0_thrd, (void *)iop0) != 0)
-		printf("error pthread_create: %s", strerror(errno));
+		log_die("error pthread_create: %s", strerror(errno));
 	}
 /*	FOR TYPE 3: 
  *	OPEN DESC FOR iop0
@@ -218,15 +215,15 @@ void *iop0_thrd(void *arg)
 		log_die("Error initing thread attrs\n");
 
 	if (pthread_create(&iop->tid, &dflt_attrs, io_thread, (void *)iop) != 0)
-	    printf("pthread_create error: %s\n", strerror(errno));
+	    log_die("pthread_create() error");
 
 	LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
 	    if (pthread_create(&iop1->iop->tid, &dflt_attrs, iop1->iop->io_thread, (void *)iop1->iop) != 0)
-		printf("error pthread_create: %s", strerror(errno));
+		log_die("error pthread_create()");
 	}
 
 	r = pthread_join(iop->tid, NULL);
-	printf("pthread_join() returned\n");
+	log_msg("pthread_join() returned\n");
 	pthread_exit(NULL);
 }
 
@@ -241,25 +238,25 @@ void *io_t3_thread(void *arg)
 	set_thrd_sigmask(&sig_set);
 	pthread_cleanup_push(release_mtx, iop);
 
-	printf("Running io_t3_thread %s\n", iop->path);
+	log_msg("Running io_t3_thread %s\n", iop->path);
 
 	for (;;) {
 	    if (*iop->iofd_p < 0) {
 		pthread_mutex_lock(&iop->fd_lock);
 
 		if (*iop->iofd_p < 0) {
-		    printf("opening fd for %s\n", iop->path);
+		    log_msg("opening fd for %s\n", iop->path);
 		    if ((*iop->iofd_p = open_desc(iop)) < 0) {
-			printf("open error. Sleeping...\n");
+			log_msg("open error. Sleeping...\n");
 			sleep(10);
 			pthread_mutex_unlock(&iop->fd_lock);
 			continue;
 		    } else {
-			printf("Releasing lock: %s Desc: %d\n\n", iop->path, *iop->iofd_p);
+			log_msg("Releasing lock: %s Desc: %d\n\n", iop->path, *iop->iofd_p);
 			pthread_mutex_unlock(&iop->fd_lock);
 		    }
 		} else {
-		    printf("Releasing lock: %s Desc: %d\n\n", iop->path, *iop->iofd_p);
+		    log_msg("Releasing lock: %s Desc: %d\n\n", iop->path, *iop->iofd_p);
 		    pthread_mutex_unlock(&iop->fd_lock);
 		}
 	    }
@@ -269,12 +266,12 @@ void *io_t3_thread(void *arg)
 		r = iop->rbuf_readfrom(iop);
 
 	    if (SIGTERM_STAT == TRUE) {
-		printf("SIGTERM_STAT is TRUE\n");
+		log_msg("SIGTERM_STAT is TRUE\n");
 		break;
 	    }
 	}
 
-	printf("io_thread returning for %s\n", iop->path);
+	log_msg("io_thread returning for %s\n", iop->path);
 	pthread_exit((void *)0);
 	pthread_cleanup_pop(0);
 }
@@ -292,9 +289,9 @@ void *io_thread(void *arg)
 
 	for (;;) {
 	    if (iop->io_fd < 0) {
-		printf("opening fd for %s\n", iop->path);
+		log_msg("opening fd for %s\n", iop->path);
 		if ((iop->io_fd = open_desc(iop)) < 0) {
-		    printf("open error. Sleeping...\n");
+		    log_msg("open error. Sleeping...\n");
 		    sleep(10);
 		    continue;
 		}
@@ -310,7 +307,7 @@ void *io_thread(void *arg)
 		iop->io_fd = -1;
 
 		if (SIGTERM_STAT == TRUE) {
-			printf("SIGTERM_STAT is TRUE\n");
+			log_msg("SIGTERM_STAT is TRUE\n");
 			if (iop->desc_type == UNIX_SOCK)
 			    if (unlink(iop->path) != 0)
 				log_ret("unlinkk error: %s %s\n", iop->path, errno);
@@ -320,7 +317,7 @@ void *io_thread(void *arg)
 	    }
 	}
 
-	printf("io_thread returning for %s\n", iop->path);
+	log_msg("io_thread returning for %s\n", iop->path);
 	pthread_exit((void *)0);
 	pthread_cleanup_pop(0);
 }
@@ -332,21 +329,21 @@ void release_mtx(void *arg)
 
 	iop = (struct io_params *)arg;
 
-	printf("Cleanup called for %s\n", iop->path);
+	log_msg("Cleanup called for %s\n", iop->path);
 /*
 *	if ((r = pthread_mutex_trylock(&iop->rbuf_p->lock)) != 0) {
 *		if (r != EBUSY)
 *			log_die("pthread_mutex_trylock() error: %d\n", r);
 *	} else {
-*		printf("trylock returned %d\n", r);
+*		log_msg("trylock returned %d\n", r);
 *	}
 */
 
-	printf("Unlokcking MTX\n");
+	log_msg("Unlokcking MTX\n");
 	if ((r = pthread_mutex_unlock(&iop->rbuf_p->mtx_lock)) != 0)
-		printf("unlock error: %d\n", r);
+		log_msg("unlock error: %d\n", r);
 
-	printf("release_mtx() returning ro %s\n", iop->path);
+	log_msg("release_mtx() returning ro %s\n", iop->path);
 }
 
 int validate_path(struct io_params *iop)
@@ -357,7 +354,7 @@ int validate_path(struct io_params *iop)
 		return 0;
 
 	if (validate_ftype(iop, &sb) != 0) {
-		printf("CONFIG ERR: Incorrect file type for %s\n", iop->path);
+		log_msg("CONFIG ERR: Incorrect file type for %s\n", iop->path);
 		return 1;
 	}
 }
@@ -365,17 +362,17 @@ int validate_path(struct io_params *iop)
 int validate_ftype(struct io_params *iop, struct stat *s)
 {
 	if ((iop->desc_type == REG_FILE) && (!S_ISREG(s->st_mode))) {
-		printf("CONFIG ERR: %s is not a regular file\n", iop->path);
+		log_msg("CONFIG ERR: %s is not a regular file\n", iop->path);
 		return -1;
 	}
 
 	if ((iop->desc_type == FIFO) && (!S_ISFIFO(s->st_mode))) {
-		printf("%s is not a FIFO\n", iop->path);
+		log_msg("%s is not a FIFO\n", iop->path);
 		return -1;
 	}
 
 	if ((iop->desc_type == UNIX_SOCK) && (!S_ISSOCK(s->st_mode))) {
-		printf("%s is not a UNIX socket\n", iop->path);
+		log_msg("%s is not a UNIX socket\n", iop->path);
 		return -1;
 	}
 	return 0;
@@ -430,7 +427,7 @@ void terminate(void)
 	struct iop0_params	*iop0;
 	int			r;
 
-	printf("Terminating\n");
+	log_msg("Terminating\n");
 
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs) {
 
@@ -454,19 +451,19 @@ int cancel_ioparam(struct io_params *iop)
 
 	error = 0;
 	
-	printf("cancel_iopraram() --- for %s\n", iop->path);
+	log_msg("cancel_iopraram() --- for %s\n", iop->path);
 
 	if ((r = pthread_cancel(iop->tid)) != 0)
 		log_die("pthread_cancel() error: %d\n", r);
 
 	if ((r = pthread_join(iop->tid, NULL)) != 0) {
 		if (r == EINVAL)
-			printf("pthread_join() returned EINVAL\n");
+			log_msg("pthread_join() returned EINVAL\n");
 		else
 			error = r;
 	} 
 
-	printf("cancel_ioparam returning %d\n", error);
+	log_msg("cancel_ioparam returning %d\n", error);
 	return error;	
 }
 
