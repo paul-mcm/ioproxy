@@ -38,8 +38,6 @@
 
 #define FALSE		0
 #define TRUE		1
-#define BUFF_SIZE	2048
-#define SIZE		256
 
 typedef enum {
 	TYPE_1,		/* 1-to-1    */
@@ -103,6 +101,7 @@ struct io_params {
 	pthread_mutex_t		listlock;	/* s */
 	pthread_cond_t		readable;	/* s */
 	pthread_mutex_t		fd_lock;	/* s */
+	int			buf_sz;
 	int			io_fd;
 	int			*iofd_p;		/* TYPE 3 ONLY */
         char			*path;

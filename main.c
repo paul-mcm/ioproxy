@@ -86,7 +86,7 @@ void iop_setup(struct io_cfg *iocfg)
 	    pthread_cond_init(&iop->readable, NULL);
 	    iop0->iop->listlock = PTHREAD_MUTEX_INITIALIZER;
 
-	    iop0->iop->rbuf_p = new_rbuf(iocfg->io_type);
+	    iop0->iop->rbuf_p = new_rbuf(iocfg->io_type, iop->buf_sz);
 	    iop0->iop->listready = malloc(sizeof(int));
 	    *iop0->iop->listready = 0;
 
@@ -134,7 +134,7 @@ void iop_setup(struct io_cfg *iocfg)
 		newiop0->iop->listready = malloc(sizeof(int));
 		*newiop0->iop->listready = 0;
 
-		newiop0->iop->rbuf_p = new_rbuf(iocfg->io_type);
+		newiop0->iop->rbuf_p = new_rbuf(iocfg->io_type, newiop0->iop->buf_sz);
 		newiop0->iop->rbuf_writeto = rbuf_mtx_writeto;
 		newiop1->iop->rbuf_readfrom = rbuf_t3_readfrom;
 		newiop1->iop->io_thread = io_t3_thread;

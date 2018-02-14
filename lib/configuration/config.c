@@ -294,6 +294,7 @@ void print_config_params(struct io_params *iop)
 	printf("rbuf_p addr: %p\n", iop->rbuf_p);
 	printf("io_fd ptr: %p\n", iop->io_fd);
 	printf("fd_lock ptr: %p\n", iop->fd_lock);
+	printf("buf_sz: %d\n", iop->buf_sz);
 
 /*	printf("readable addr: %p\n", iop->readable);
 *	printf("listlock addr: %p\n", iop->listlock);
@@ -457,6 +458,7 @@ struct io_params *iop_alloc(void)
 	bzero(iop, sizeof(struct io_params));
 	iop->io_fd = -1;
 	iop->sock_data = NULL;
+	iop->buf_sz = BUFF_SIZE;
 	
 	return iop;
 }

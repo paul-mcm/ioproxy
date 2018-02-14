@@ -36,13 +36,13 @@
 
 #include "../configuration/config.h"
 
-#define RBUFF_SIZE 1024
+#define BUFF_SIZE 1024
 
 struct rbuf_entry *new_rbuf();
 
 struct rbuf_entry { 
 	int			id;
-        char			line[RBUFF_SIZE];
+        char			*line;
 	int			len;
         pthread_mutex_t		mtx_lock;
         pthread_rwlock_t	rw_lock;
@@ -60,7 +60,7 @@ int rbuf_mtx_writeto(struct io_params *);
 int rbuf_t3_readfrom(struct io_params *);
 
 void read_cleanup(void *);
-struct rbuf_entry *new_rbuf(int);
+struct rbuf_entry *new_rbuf(int, int);
 void free_rbuf(struct rbuf_entry *);
 void sleep_unlocked(int, pthread_mutex_t *);
 

@@ -63,7 +63,7 @@ int rbuf_mtx_writeto(struct io_params *iop)
 	pthread_cond_signal(&iop->readable);
 
 	for (;;) {
-	    if ((i = read(iop->io_fd, w_ptr->line, RBUFF_SIZE)) > 0) {
+	    if ((i = read(iop->io_fd, w_ptr->line, iop->buf_sz)) > 0) {
 		w_ptr->len = i;
 		MTX_LOCK(&w_ptr->next->mtx_lock);
 		MTX_UNLOCK(&w_ptr->mtx_lock);
@@ -161,8 +161,8 @@ int rbuf_rwlock_writeto(struct io_params *iop)
 	pthread_cond_signal(&iop->readable);
 
 	for (;;) {
-	    if ((i = read(iop->io_fd, w_ptr->line, RBUFF_SIZE)) > 0) {
-		log_msg("w_ptr read %d bytes from %d into ringbuff\n", i, iop->io_fd);
+	    if ((i = read(iop->io_fd, w_ptr->line, iop->buf_sz)) > 0) {
+/*		log_msg("w_ptr read %d bytes from %d into ringbuff\n", i, iop->io_fd); */
 		w_ptr->len = i;
 	
 		WR_LOCK(&w_ptr->next->rw_lock);
@@ -295,7 +295,7 @@ int rbuf_t3_readfrom(struct io_params *iop)
 	}      
 }
 
-struct rbuf_entry *new_rbuf(int t)
+struct rbuf_entry *new_rbuf(int t, int sz)
 {
 	int i;
 	struct rbuf_entry *e, *prev_ptr, *head;
@@ -315,7 +315,10 @@ struct rbuf_entry *new_rbuf(int t)
 		log_syserr("rbuf malloc error");
 
 	    e->id = i;
-	    e->len = RBUFF_SIZE;
+	    if ((e->line = malloc(sz)) == NULL)
+		log_syserr("rbuf malloc error");
+	    else
+		e->len = 0;
 
 	    if (t == TYPE_2)
 		pthread_rwlock_init(&e->rw_lock, &rwlock_attrs);

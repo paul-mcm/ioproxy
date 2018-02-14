@@ -66,7 +66,7 @@ int parse_line(char * ln, struct io_params *iop)
 int fill(char *f, char *v, struct io_params *iop)
 {
 	int err = 0;
-	char	*s;
+	const char *s;
 
 	if ( strcasecmp((f + 4) , "type") == 0 ) {
 	    /* XXX DOESN'T CHECK FOR ERROR */
@@ -103,6 +103,11 @@ int fill(char *f, char *v, struct io_params *iop)
  	else if (strcasecmp((f + 4), "port") == 0) {
 		iop->sock_data->port = malloc(strlen(v) + 1);
 		strncpy(iop->sock_data->port, v, strlen(v) + 1);
+	} else if (strcasecmp((f + 4), "bufsz") == 0) {
+		iop->buf_sz = strtonum(v, 1, 16384, &s);
+		if (s != NULL) {
+		    log_die("bufsz value error: %s\n", s);
+		}
 	} else {
 		log_msg("unknown value: %s %s\n", f, v);
 		err = -1;
