@@ -154,7 +154,6 @@ struct iop0_params * parse_iop0_stanza(FILE *f)
 
 	if ((ln = fetch_next_line(f)) != NULL) {
 		p = clean_line(ln);
-		iop0->iop->io_drn = set_io_dir(p);
 	} else {
 		log_msg("fetch_next_line() returned NULL\n");
 	}
@@ -214,8 +213,6 @@ struct io_params *parse_io_cfg(FILE *f)
                         log_msg("Error parsing line\n");
                         return NULL;
                 } 
-
-		iop->io_drn = set_io_dir(p);
 
 		if (last)
 			break;			

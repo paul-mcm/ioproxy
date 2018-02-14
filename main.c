@@ -92,11 +92,13 @@ void iop_setup(struct io_cfg *iocfg)
 
 	    LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
 		iop1->iop->rbuf_p	= iop0->iop->rbuf_p;
+		iop1->iop->buf_sz	= iop0->iop->buf_sz;
 		iop1->iop->listready	= iop0->iop->listready;
 		iop1->iop->listlock	= iop0->iop->listlock;
 		iop1->iop->readable	= iop0->iop->readable;
 		iop1->iop->io_fd	= iop0->iop->io_fd;
 		iop1->iop->io_thread	= io_thread;
+		iop1->iop->io_drn 	= DST;
 	    }
 
 	    if (iocfg->io_type == TYPE_1) {
@@ -139,7 +141,9 @@ void iop_setup(struct io_cfg *iocfg)
 		newiop1->iop->rbuf_readfrom = rbuf_t3_readfrom;
 		newiop1->iop->io_thread = io_t3_thread;
 
+		newiop0->iop->io_drn	= SRC;
 		newiop1->iop->rbuf_p 	= newiop0->iop->rbuf_p;
+		newiop1->iop->buf_sz	= newiop0->iop->buf_sz;
 
 		newiop1->iop->listready	= newiop0->iop->listready;
 		newiop1->iop->listlock 	= newiop0->iop->listlock;

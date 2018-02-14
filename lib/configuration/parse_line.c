@@ -68,7 +68,7 @@ int fill(char *f, char *v, struct io_params *iop)
 	int err = 0;
 	const char *s;
 
-	if ( strcasecmp((f + 4) , "type") == 0 ) {
+	if ( strcasecmp(f, "type") == 0 ) {
 	    /* XXX DOESN'T CHECK FOR ERROR */
 	    if (set_desc_t(v, iop) != 0)
 		log_die("Error setting type\n");
@@ -76,42 +76,49 @@ int fill(char *f, char *v, struct io_params *iop)
 	    if (is_sock(iop->desc_type))
 		iop->sock_data = sock_param_alloc();
 
-	} else if (strcasecmp((f + 4), "path") == 0 ) {
+	} else if (strcasecmp(f, "dir") == 0) {
+	    if (strcasecmp(v, "src") == 0)
+		iop->io_drn = SRC;
+	    else if (strcasecmp(v, "dst") == 0)
+		iop->io_drn = DST;
+	    else
+		log_die("Invalid config directive: %s: %s;\n", f, v);
+	} else if (strcasecmp(f, "path") == 0 ) {
 		iop->path = malloc(256);
 		strncpy(iop->path, v, 256);
 
-	} else if (strcasecmp((f + 4), "sockpath") == 0 ) {
+	} else if (strcasecmp(f, "sockpath") == 0 ) {
 		iop->path = malloc(256);
 		strncpy(iop->path, v, 256);
 		iop->sock_data->sockpath = iop->path;
-	} else if (strcasecmp((f + 4), "host") == 0) {
+	} else if (strcasecmp(f, "host") == 0) {
 		if ((iop->sock_data->hostname = malloc(256)) == NULL)
 			log_syserr("malloc failure: ");
 
 		strncpy(iop->sock_data->hostname, v, 256);
 		/* XXX MUST FIX */
-	} else if (strcasecmp((f + 4), "ip") == 0) {
+	} else if (strcasecmp(f, "ip") == 0) {
 		iop->sock_data->ip = malloc(256);
 		strncpy(iop->sock_data->ip, v, 256);
 
-	} else if (strcasecmp((f + 4), "conn") == 0)
+	} else if (strcasecmp(f, "conn") == 0)
 		err = set_conn(v, iop);
-	else if (strcasecmp((f + 4), "proto") == 0)
+	else if (strcasecmp(f, "proto") == 0)
 		err = set_sockio(v, iop);
-	else if (strcasecmp((f + 4), "nonblock") == 0)
+	else if (strcasecmp(f, "nonblock") == 0)
 		err = set_nonblock(v, iop);
- 	else if (strcasecmp((f + 4), "port") == 0) {
+ 	else if (strcasecmp(f, "port") == 0) {
 		iop->sock_data->port = malloc(strlen(v) + 1);
 		strncpy(iop->sock_data->port, v, strlen(v) + 1);
-	} else if (strcasecmp((f + 4), "tls") == 0)
+	} else if (strcasecmp(f, "tls") == 0)
 		iop->sock_data->tls = TRUE;
-	else if (strcasecmp((f + 4), "cacert") == 0) {
+	else if (strcasecmp(f, "cacert") == 0) {
 		iop->sock_data->cacert_path = malloc(strlen(v) + 1);
 		strncpy(iop->sock_data->cacert_path, v, strlen(v));
-	} else if (strcasecmp((f + 4), "cacertdir") == 0) {
+	} else if (strcasecmp(f, "cacertdir") == 0) {
 		iop->sock_data->cacert_dirpath = malloc(strlen(v) + 1);
 		strncpy(iop->sock_data->cacert_dirpath, v, strlen(v));
-	} else if (strcasecmp((f + 4), "reqcrt") == 0) {
+	} else if (strcasecmp(f, "reqcrt") == 0) {
 		if (strcasecmp(v, "demand") == 0)
 		    iop->sock_data->cert_strtgy = DEMAND;
 		else if (strcasecmp(v, "never") == 0)
@@ -122,7 +129,7 @@ int fill(char *f, char *v, struct io_params *iop)
 		    iop->sock_data->cert_strtgy = ALLOW;
 		else
 		    log_die("Bad value for 'reqcrt' param");
-	} else if (strcasecmp((f + 4), "bufsz") == 0) {
+	} else if (strcasecmp(f, "bufsz") == 0) {
 		iop->buf_sz = strtonum(v, 1, 16384, &s);
 		if (s != NULL) {
 		    log_die("bufsz value error: %s\n", s);
