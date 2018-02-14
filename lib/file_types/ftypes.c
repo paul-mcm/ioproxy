@@ -242,7 +242,7 @@ int call_accept(struct io_params *iop)
 int call_connect(struct io_params *iop)
 {
 	struct sockaddr_un	unix_saddr;
-	int			len, fd, r;
+	int			len, fd;
 
 	if (iop->desc_type == UNIX_SOCK) {
 	    fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -251,17 +251,16 @@ int call_connect(struct io_params *iop)
 	    strlcpy(unix_saddr.sun_path, iop->path, sizeof(unix_saddr.sun_path));
 	    len = offsetof(struct sockaddr_un, sun_path) + strlen(iop->path);
 
-	    return do_connect(fd, (SA *)&unix_saddr, len);
+	    return do_localconnect(fd, (SA *)&unix_saddr, len);
 
 	} else if (iop->desc_type == TCP_SOCK) {
 	    return do_netconnect(iop);
 	} else if (iop->desc_type == UDP_SOCK) {
 	    return do_netconnect(iop);
 	}
-	return fd;
 }
 
-int do_connect(int fd, struct sockaddr *saddr, int l)
+int do_localconnect(int fd, struct sockaddr *saddr, int l)
 {
 	for (;;) {
 	    if (connect(fd, (SA *)saddr, l) != 0) {
@@ -298,7 +297,6 @@ int do_netconnect(struct io_params *iop)
 		exit(-1);
 	    } else {
 		ressave = res;
-		printf("getaddrinfo() success: %d\n", r);
 	    }
 
 	    do {
@@ -318,7 +316,6 @@ int do_netconnect(struct io_params *iop)
 	    } while ((res = res->ai_next) != NULL);
 
 	    if (res == NULL) {
-		printf("Lconnect() error: %s", strerror(errno));
 		sleep(2);
 		continue;
 	    } else {
