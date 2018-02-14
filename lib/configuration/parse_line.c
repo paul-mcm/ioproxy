@@ -31,31 +31,23 @@ int parse_line(char * ln, struct io_params *iop)
 	int r;
 
 	/* LINE NOT TERMINATED BY ';' IS A CONFIG ERROR */
-	if (strncmp(&ln[strlen(ln) - 1], ";", 1) != 0 ) {
-		printf("missing ';' at end of line: %s\n", ln);
-		return(-1);
-	}
+	if (strncmp(&ln[strlen(ln) - 1], ";", 1) != 0 )
+		log_die("missing ';' at end of line: %s\n", ln);
 
 	while ((pr = strsep(&ln, ";")) != NULL) {
   		field = strsep(&pr, ":");
 		val = pr;
 
 		/* FAILURE TO FIND ':' MEANS CONFIG ERROR */
-		if(val == '\0') {
-			printf("config error - missing ':' %s\n", ln);
-			return(-1);
-		}
+		if(val == '\0')
+			log_die("config error - missing ':' %s\n", ln);
 
 		/* CONFIG ERR IF VAL/FIELD END W/ BLANK SPACE */
-		if (isblank(val[strlen(val) - 1]) != 0) {
-			printf("blankspace error: ->%s<-\n", val);
-			return(-1);
-		}
+		if (isblank(val[strlen(val) - 1]) != 0)
+			log_die("blankspace error: ->%s<-\n", val);
 
-		if (isblank(field[strlen(field) - 1]) != 0) {
-			printf("blankspace error: ->%s<-\n", field);
-			return(-1);
-		}
+		if (isblank(field[strlen(field) - 1]) != 0)
+			log_die("blankspace error: ->%s<-\n", field);
 
 		field = rm_space(field);
 		val = rm_space(val);
@@ -78,10 +70,8 @@ int fill(char *f, char *v, struct io_params *iop)
 
 	if ( strcasecmp((f + 4) , "type") == 0 ) {
 	    /* XXX DOESN'T CHECK FOR ERROR */
-	    if (set_desc_t(v, iop) != 0) {
-		printf("Error setting type\n");
-		exit(-1);
-	    }
+	    if (set_desc_t(v, iop) != 0)
+		log_die("Error setting type\n");
 		
 	    if (is_sock(iop->desc_type))
 		iop->sock_data = sock_param_alloc();
@@ -95,12 +85,10 @@ int fill(char *f, char *v, struct io_params *iop)
 		strncpy(iop->path, v, 256);
 		iop->sock_data->sockpath = iop->path;
 	} else if (strcasecmp((f + 4), "host") == 0) {
-		if ((iop->sock_data->hostname = malloc(256)) == NULL) {
-			printf("malloc failure: %s\n", strerror(errno));
-			exit(-1);
-		}
-		strncpy(iop->sock_data->hostname, v, 256);
+		if ((iop->sock_data->hostname = malloc(256)) == NULL)
+			log_syserr("malloc failure: ");
 
+		strncpy(iop->sock_data->hostname, v, 256);
 		/* XXX MUST FIX */
 	} else if (strcasecmp((f + 4), "ip") == 0) {
 		iop->sock_data->ip = malloc(256);
@@ -144,7 +132,7 @@ int set_conn(char *t, struct io_params *iop)
         else if (strcasecmp(t, "LISTEN") == 0)
 		iop->sock_data->conn_type = LISTEN;
         else {
-                printf("unknown connection type: %s\n", t);
+                log_msg("unknown connection type: %s\n", t);
                 err = -1;
         }
 
@@ -161,7 +149,7 @@ int set_sockio(char *t, struct io_params *iop)
         else if (strcasecmp(t, "STREAM") == 0)
 		iop->sock_data->sockio = STREAM;
         else {
-                printf("unknown proto: %s\n", t);
+                log_msg("unknown proto: %s\n", t);
                 err -1;
         }
 
@@ -187,7 +175,7 @@ int set_desc_t(char *t, struct io_params *iop)
 	else if (strcasecmp(t, "UNIX_SOCK") == 0)
 		iop->desc_type = UNIX_SOCK;
 	else {
-		printf("unknown type: %s\n", t);
+		log_msg("unknown type: %s\n", t);
 		err = -1;
 	}
 	return err;

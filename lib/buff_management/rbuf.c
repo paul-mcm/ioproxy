@@ -162,7 +162,7 @@ int rbuf_rwlock_writeto(struct io_params *iop)
 
 	for (;;) {
 	    if ((i = read(iop->io_fd, w_ptr->line, RBUFF_SIZE)) > 0) {
-		printf("w_ptr read %d bytes from %d into ringbuff\n", i, iop->io_fd);
+		log_msg("w_ptr read %d bytes from %d into ringbuff\n", i, iop->io_fd);
 		w_ptr->len = i;
 	
 		WR_LOCK(&w_ptr->next->rw_lock);

@@ -30,8 +30,7 @@ int read_config(struct all_cfg_list *all)
 	struct io_cfg *iocfg;
 
         if ((fp = fopen("./ioproxy.conf", "r")) == NULL)  {
-		printf("fopen error: %s\n", strerror(errno));
-		exit(-1);
+		log_syserr("fopen error: ");
 	}
 
         /* FIND BEGIN OF CONFIG STANZA BY IGNORING STUFF UNTIL "{" IS FOUND */
@@ -156,7 +155,7 @@ struct iop0_params * parse_iop0_stanza(FILE *f)
 		p = clean_line(ln);
 		iop0->iop->io_drn = set_io_dir(p);
 	} else {
-		printf("fetch_next_line() returned NULL\n");
+		log_msg("fetch_next_line() returned NULL\n");
 	}
 
 	fseek(f, -strlen(ln), SEEK_CUR);
@@ -171,7 +170,7 @@ struct iop0_params * parse_iop0_stanza(FILE *f)
                 }
 
 		if ((r = parse_line(p, iop0->iop)) < 0) {
-			printf("Error parsing line\n");
+			log_msg("Error parsing line\n");
 			free(ln);
 			return NULL;
 		}
@@ -211,7 +210,7 @@ struct io_params *parse_io_cfg(FILE *f)
 		}
 
                 if ((r = parse_line(p, iop)) < 0 ) {
-                        printf("Error parsing line\n");
+                        log_msg("Error parsing line\n");
                         return NULL;
                 } 
 
@@ -264,20 +263,18 @@ int show_config(struct io_cfg *iocfg)
 	struct iop0_params *iop0;
 	struct iop1_params *iop1;
 
-	printf("========= START CONFIG ==========\n");
-	printf("io_type\t\t%s\n", io_types[iocfg->io_type]);
+	log_msg("========= START CONFIG ==========\n");
+	log_msg("io_type\t\t%s\n", io_types[iocfg->io_type]);
 
 	LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths) {
-		printf("------- iop0 path -----------\n");
+		log_msg("------- iop0 path -----------\n");
 		print_config_params(iop0->iop);
 
 	        LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
-			printf("-------- iopath -------\n");
+			log_msg("-------- iopath -------\n");
 			print_config_params(iop1->iop);
 		}
         }
-
-        printf("\n\n");
 }
 
 int show_all_configs(struct all_cfg_list *all)
