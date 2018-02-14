@@ -49,3 +49,4 @@ int call_accept(struct io_params *);
 int call_connect(struct io_params *);
 
 int do_connect(int, struct sockaddr *, int);
+int do_netconnect(struct io_params *);

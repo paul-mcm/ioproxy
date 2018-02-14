@@ -201,7 +201,7 @@ int call_bind(struct io_params *iop)
 	} else if (iop->desc_type == TCP_SOCK) {
 	    net_saddr.sin_family = AF_INET;
 	    net_saddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	    net_saddr.sin_port = htons(iop->sock_data->port);
+/*	    net_saddr.sin_port = htons(iop->sock_data->port); */
 
 	    fd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -242,9 +242,8 @@ int call_accept(struct io_params *iop)
 int call_connect(struct io_params *iop)
 {
 	struct sockaddr_un	unix_saddr;
-	struct sockaddr_in	net_saddr;
-	int			len, fd;
-	
+	int			len, fd, r;
+
 	if (iop->desc_type == UNIX_SOCK) {
 	    fd = socket(AF_UNIX, SOCK_STREAM, 0);
 	    bzero(&unix_saddr, sizeof(unix_saddr));
@@ -252,31 +251,12 @@ int call_connect(struct io_params *iop)
 	    strlcpy(unix_saddr.sun_path, iop->path, sizeof(unix_saddr.sun_path));
 	    len = offsetof(struct sockaddr_un, sun_path) + strlen(iop->path);
 
-	    return do_connect(fd, (SA *)&unix_saddr, len));
+	    return do_connect(fd, (SA *)&unix_saddr, len);
 
 	} else if (iop->desc_type == TCP_SOCK) {
-	    fd = socket(AF_INET, SOCK_STREAM, 0);
-	    bzero(&net_saddr, sizeof(net_saddr));
-	    net_saddr.sin_family = AF_INET;
-	    net_saddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	    net_saddr.sin_port = htons(iop->sock_data->port);
-
-	    if (iop->sock_data->ip != NULL)
-		inet_pton(AF_INET, iop->sock_data->ip, &net_saddr.sin_addr);
-
-	    return do_connect(fd, (SA *)&net_saddr, sizeof(net_saddr));
-
+	    return do_netconnect(iop);
 	} else if (iop->desc_type == UDP_SOCK) {
-	    fd = socket(AF_INET, SOCK_DGRAM, 0);
-	    bzero(&net_saddr, sizeof(net_saddr));
-	    net_saddr.sin_family = AF_INET;
-	    net_saddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	    net_saddr.sin_port = htons(iop->sock_data->port);
-
-	    if (iop->sock_data->ip != NULL)
-		inet_pton(AF_INET, iop->sock_data->ip, &net_saddr.sin_addr);
-
-	    do_connect(fd, (SA *)&net_saddr, sizeof(net_saddr));
+	    return do_netconnect(iop);
 	}
 	return fd;
 }
@@ -298,6 +278,54 @@ int do_connect(int fd, struct sockaddr *saddr, int l)
 		break;
 	    }
 	}
+}
+
+int do_netconnect(struct io_params *iop)
+{
+	int		fd, r;
+	struct addrinfo	hints, *res, *ressave;
+
+	bzero(&hints, sizeof(struct addrinfo));
+	hints.ai_family = AF_INET;
+	if (iop->desc_type == UDP_SOCK)
+	    hints.ai_socktype = SOCK_DGRAM;
+	else
+	    hints.ai_socktype = SOCK_STREAM;
+
+	for (;;) {
+	    if ((r = getaddrinfo(iop->sock_data->hostname, iop->sock_data->port, &hints, &res)) != 0) { 
+		printf("ERROR: %s\n", gai_strerror(r));
+		exit(-1);
+	    } else {
+		ressave = res;
+		printf("getaddrinfo() success: %d\n", r);
+	    }
+
+	    do {
+		if ((fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0) {
+		    printf("socket() error: %s\n", strerror(errno));
+		    continue;
+		}
+
+		if (connect(fd, res->ai_addr, res->ai_addrlen) != 0) {
+		    printf("connect() error: %d %s\n", errno, strerror(errno));
+		    close(fd);
+		    continue;
+		} else {
+		    printf("Success\n");
+		    break;
+		}
+	    } while ((res = res->ai_next) != NULL);
+
+	    if (res == NULL) {
+		printf("Lconnect() error: %s", strerror(errno));
+		sleep(2);
+		continue;
+	    } else {
+		break;
+	    }
+        }
+	return fd;
 }
 
 int set_flags(struct io_params *iop)

@@ -112,9 +112,10 @@ int fill(char *f, char *v, struct io_params *iop)
 		err = set_sockio(v, iop);
 	else if (strcasecmp((f + 4), "nonblock") == 0)
 		err = set_nonblock(v, iop);
- 	else if (strcasecmp((f + 4), "port") == 0)
-		iop->sock_data->port = atoi(v);
-	else {
+ 	else if (strcasecmp((f + 4), "port") == 0) {
+		iop->sock_data->port = malloc(strlen(v) + 1);
+		strncpy(iop->sock_data->port, v, strlen(v) + 1);
+	} else {
 		log_msg("unknown value: %s %s\n", f, v);
 		err = -1;
 	}

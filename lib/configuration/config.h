@@ -77,7 +77,7 @@ struct sock_param {
         T_SOCKIO	sockio;
         char		*ip;
 	int		listenfd;
-        int     	port;
+        char	     	*port;
         char    	*hostname;
 	char		*sockpath;
 };
