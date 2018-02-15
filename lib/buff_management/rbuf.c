@@ -111,11 +111,11 @@ int rbuf_mtx_readfrom(struct io_params *iop)
 		    iop->bytes += nw;
 		    continue;
 		} else if (nw == 0) {
-		    sleep_unlocked(3, &r_ptr->mtx_lock);
+		    sleep_unlocked(iop, 3, (void *)r_ptr->mtx_lock);
 		    continue;
 		} else if (nw < 0) {
 		    if ((r = io_error(iop, errno)) == 0) {
-			sleep_unlocked(3, &r_ptr->mtx_lock);
+			sleep_unlocked(iop, 3, (void *)r_ptr->mtx_lock);
 			continue;
 		    } else if (r == 1) {   /* recv'd EAGAIN or EINTR */
 			continue;
@@ -202,16 +202,12 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 		    iop->bytes += nw;
 		    continue;
 		} else if (nw == 0) {
-		    RW_UNLOCK(&r_ptr->rw_lock);
-		    sleep(3);
-		    RD_LOCK(&r_ptr->rw_lock);
+		    sleep_unlocked(iop, 3, (void *)r_ptr->rw_lock);
 		    continue;
 		} else if (nw < 0) {
 		    /* SOME KNOWN ERROR; WORTH RETRYING? */
 		    if ((r = io_error(iop, errno)) == 0) {
-			pthread_rwlock_unlock(&r_ptr->rw_lock);
-			sleep(3);
-			pthread_rwlock_rdlock(&r_ptr->rw_lock);
+			sleep_unlocked(iop, 3, (void *)r_ptr->rw_lock);
 			continue;
 		    } else if (r == 1) {   /* recv'd EAGAIN or EINTR */
 			continue;
@@ -259,11 +255,11 @@ int rbuf_t3_readfrom(struct io_params *iop)
 		    iop->bytes += nw;
 		    continue;
 		} else if (nw == 0) {
-		    sleep_unlocked(3, &iop->fd_lock);
+		    sleep_unlocked(iop, 3, (void *)iop->fd_lock);
 		    continue;
 		} else if (nw < 0) {
 		    if ((r = io_error(iop, errno)) == 0) {
-			sleep_unlocked(3, &r_ptr->mtx_lock);
+			sleep_unlocked(iop, 3, (void *)r_ptr->mtx_lock);
 			continue;
 		    } else if (r == 1) {   /* recv'd EAGAIN or EINTR */
 			continue;
@@ -349,13 +345,22 @@ int io_error(struct io_params *iop, int e)
 	}
 }
 
-void sleep_unlocked(int n, pthread_mutex_t *l)
+void sleep_unlocked(struct io_params *iop, int n, void *l)
 {
 	int r;
+	pthread_mutex_t		*mtx;
+	pthread_rwlock_t	*rwlk;
 
-	MTX_UNLOCK(l);
-	sleep(n);
-	MTX_LOCK(l);
+	if (*iop->io_type_p == TYPE_1 || *iop->io_type_p == TYPE_3) {
+	    mtx = (pthread_mutex_t *)l;
+	    MTX_UNLOCK(mtx);
+	    sleep(n);
+	    MTX_LOCK(mtx);
+	} else if (*iop->io_type_p == TYPE_2) {
+	    RW_UNLOCK(rwlk);
+	    sleep(n);
+	    RD_LOCK(rwlk);
+	}
 }
 
 void rbuf_locksync0(struct io_params *iop)

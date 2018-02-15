@@ -60,7 +60,7 @@ int rbuf_t3_readfrom(struct io_params *);
 void read_cleanup(void *);
 struct rbuf_entry *new_rbuf(int, int);
 void free_rbuf(struct rbuf_entry *);
-void sleep_unlocked(int, pthread_mutex_t *);
+void sleep_unlocked(struct io_params *, int, void *);
 
 int io_error(struct io_params *, int);
 
