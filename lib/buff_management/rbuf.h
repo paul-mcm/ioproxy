@@ -50,13 +50,11 @@ struct rbuf_entry {
 };
 
 int rbuf_rwlock_readfrom(struct io_params *);
-int rbuf_rwlock_readfrom2(struct io_params *);
 int rbuf_rwlock_writeto(struct io_params *);
 
 int rbuf_mtx_readfrom(struct io_params *);
-int rbuf_mtx_readfrom2(struct io_params *);
-
 int rbuf_mtx_writeto(struct io_params *);
+
 int rbuf_t3_readfrom(struct io_params *);
 
 void read_cleanup(void *);
