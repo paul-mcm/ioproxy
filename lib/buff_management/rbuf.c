@@ -42,8 +42,8 @@ if ((r = pthread_mutex_unlock(m)) != 0) {       \
 
 int rbuf_mtx_writeto(struct io_params *iop)
 {
-	struct rbuf_entry *w_ptr;
-	int i, r;
+	struct rbuf_entry	*w_ptr;
+	int 			i, r;
 
 	w_ptr = iop->rbuf_p;
 
@@ -78,13 +78,15 @@ int rbuf_mtx_writeto(struct io_params *iop)
 		sleep(3);
 		continue;
 	    } else {
-		if (io_error(iop, errno) == 0) {
+		if ((r = io_error(iop, errno)) == 0) {
 		    sleep(3);
+		    continue;
+		} else if (r == 1) {   /* recv'd EAGAIN or EINTR */
 		    continue;
 		} else {
 		    MTX_UNLOCK(&w_ptr->mtx_lock);
 		    return -1;
- 		}
+		}
 	    }
 	}
 }
@@ -127,8 +129,10 @@ int rbuf_mtx_readfrom(struct io_params *iop)
 		    sleep_unlocked(3, &r_ptr->mtx_lock);
 		    continue;
 		} else if (nw < 0) {
-		    if (io_error(iop, errno) == 0) {
+		    if ((r = io_error(iop, errno)) == 0) {
 			sleep_unlocked(3, &r_ptr->mtx_lock);
+			continue;
+		    } else if (r == 1) {   /* recv'd EAGAIN or EINTR */
 			continue;
 		    } else {
 			/* UNKOWN ERROR; * ASSUME DESC INVALID */
@@ -178,8 +182,10 @@ int rbuf_rwlock_writeto(struct io_params *iop)
 		sleep(3);
 		continue;
 	    } else {
-		if (io_error(iop, errno) == 0) {
+		if ((r = io_error(iop, errno)) == 0) {
 		    sleep(3);
+		    continue;
+		} else if (r == 1) {   /* recv'd EAGAIN or EINTR */
 		    continue;
 		} else {
 		    RW_UNLOCK(&w_ptr->rw_lock);
@@ -231,10 +237,12 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 		    continue;
 		} else if (nw < 0) {
 		    /* SOME KNOWN ERROR; WORTH RETRYING? */
-		    if (io_error(iop, errno) == 0) {
+		    if ((r = io_error(iop, errno)) == 0) {
 			pthread_rwlock_unlock(&r_ptr->rw_lock);
 			sleep(3);
 			pthread_rwlock_rdlock(&r_ptr->rw_lock);
+			continue;
+		    } else if (r == 1) {   /* recv'd EAGAIN or EINTR */
 			continue;
 		    } else {
 			/* UNKOWN ERROR; * ASSUME DESC INVALID */
@@ -286,8 +294,10 @@ int rbuf_t3_readfrom(struct io_params *iop)
 		    sleep_unlocked(3, &iop->fd_lock);
 		    continue;
 		} else if (nw < 0) {
-		    if (io_error(iop, errno) == 0) {
+		    if ((r = io_error(iop, errno)) == 0) {
 			sleep_unlocked(3, &r_ptr->mtx_lock);
+			continue;
+		    } else if (r == 1) {   /* recv'd EAGAIN or EINTR */
 			continue;
 		    } else {
 			MTX_UNLOCK(&iop->fd_lock);
@@ -363,10 +373,12 @@ int io_error(struct io_params *iop, int e)
 		log_ret("io error - remote end closed for %d: %s", \
 		    iop->io_fd, iop->path);
 		return 0;
-	    } else {
-		log_ret("unknown io error %d %s", e, iop->path);
-		return 1;
-	    }
+	} else if (errno == EAGAIN || errno == EINTR) {
+	    return 1;
+	} else {
+	    log_ret("unknown io error %d %s", e, iop->path);
+	    return 2;
+	}
 }
 
 void sleep_unlocked(int n, pthread_mutex_t *l)

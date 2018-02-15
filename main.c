@@ -395,8 +395,6 @@ void ioparam_list_kill(struct io_cfg *iocfg)
 	}	
 }
 
-
-
 void * sigterm_thrd(void *arg)
 {
         int			sig;
