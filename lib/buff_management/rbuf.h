@@ -64,4 +64,7 @@ void sleep_unlocked(int, pthread_mutex_t *);
 
 int io_error(struct io_params *, int);
 
+void rbuf_locksync0(struct io_params *);
+void rbuf_locksync(struct io_params *);
+
 #endif

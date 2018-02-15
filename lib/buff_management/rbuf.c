@@ -47,20 +47,9 @@ int rbuf_mtx_writeto(struct io_params *iop)
 
 	w_ptr = iop->rbuf_p;
 
-	/* CALL pthread_conf_signal() TO SYNCHRONIZE 
-	* LOCKING OF FIRST ENTRY IN LIST.  THIS THREAD 
-	* MUST GET THE LOCK FIRST.
-	*/
-
-	/* GRAB LOCK */
+	/* THIS THREAD MUST GET THE LOCK FIRST */
 	MTX_LOCK(&w_ptr->mtx_lock);
-
-	MTX_LOCK(&iop->listlock);
-	*iop->listready = 1;
-	MTX_UNLOCK(&iop->listlock);
-
-	/* SIGNAL WRITE THREAD */
-	pthread_cond_signal(&iop->readable);
+	rbuf_locksync0(iop);
 
 	for (;;) {
 	    if ((i = read(iop->io_fd, w_ptr->line, iop->buf_sz)) > 0) {
@@ -98,12 +87,8 @@ int rbuf_mtx_readfrom(struct io_params *iop)
         int r, nw;
 	char *lptr;
 
-        MTX_LOCK(&iop->listlock);
-        while (*iop->listready == 0)
-                pthread_cond_wait(&iop->readable, &iop->listlock);
-        MTX_UNLOCK(&iop->listlock);
-
 	r_ptr = iop->rbuf_p;
+	rbuf_locksync(iop);
 	MTX_LOCK(&r_ptr->mtx_lock);
 
         for (;;) {
@@ -151,20 +136,10 @@ int rbuf_rwlock_writeto(struct io_params *iop)
 	int i, r;
 
 	w_ptr = iop->rbuf_p;
-	/* CALL pthread_conf_signal() TO SYNCHRONIZE 
-	* LOCKING OF FIRST ENTRY IN LIST.  THIS THREAD 
-	* MUST GET THE LOCK FIRST.
-	*/
 
-	/* GRAB LOCK */
+	/* THIS THREAD MUST GET THE LOCK FIRST */
 	WR_LOCK(&w_ptr->rw_lock);
-
-	MTX_LOCK(&iop->listlock);
-	*iop->listready = 1;
-	MTX_UNLOCK(&iop->listlock);
-
-	/* SIGNAL WRITE THREAD */
-	pthread_cond_signal(&iop->readable);
+	rbuf_locksync0(iop);
 
 	for (;;) {
 	    if ((i = read(iop->io_fd, w_ptr->line, iop->buf_sz)) > 0) {
@@ -203,11 +178,7 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 	int r, nw;
 	char *lptr;
 
-	MTX_LOCK(&iop->listlock);
-	while (*iop->listready == 0)
-	    pthread_cond_wait(&iop->readable, &iop->listlock);
-	MTX_UNLOCK(&iop->listlock);
-
+	rbuf_locksync(iop);
 	r_ptr = iop->rbuf_p;
 	RD_LOCK(&r_ptr->rw_lock);
 
@@ -260,12 +231,9 @@ int rbuf_t3_readfrom(struct io_params *iop)
         int r, nw, nleft;
 	char *lptr;
 
-        MTX_LOCK(&iop->listlock);
-        while (*iop->listready == 0)
-                pthread_cond_wait(&iop->readable, &iop->listlock);
-        MTX_UNLOCK(&iop->listlock);
-
 	r_ptr = iop->rbuf_p;
+
+	rbuf_locksync(iop);
 	MTX_LOCK(&r_ptr->mtx_lock);
 	MTX_LOCK(&iop->fd_lock);
 	
@@ -384,8 +352,30 @@ int io_error(struct io_params *iop, int e)
 void sleep_unlocked(int n, pthread_mutex_t *l)
 {
 	int r;
-	
+
 	MTX_UNLOCK(l);
 	sleep(n);
 	MTX_LOCK(l);
+}
+
+void rbuf_locksync0(struct io_params *iop)
+{
+	int r;
+
+	MTX_LOCK(&iop->listlock);
+	*iop->listready = 1;
+	MTX_UNLOCK(&iop->listlock);
+
+	/* SIGNAL WRITE THREAD */
+	pthread_cond_signal(&iop->readable);
+}
+
+void rbuf_locksync(struct io_params *iop)
+{
+	int r;
+
+	MTX_LOCK(&iop->listlock);
+        while (*iop->listready == 0)
+                pthread_cond_wait(&iop->readable, &iop->listlock);
+        MTX_UNLOCK(&iop->listlock);
 }
