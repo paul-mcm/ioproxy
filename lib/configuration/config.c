@@ -289,7 +289,7 @@ void print_config_params(struct io_params *iop)
 {
 	struct sock_param *sp;
 
-	printf("io_type_p\t\t%s\n", io_types[*iop->io_type_p]);
+	printf("type_p\t\t%s\n", io_types[*iop->type_p]);
 	printf("io_drn:\t\t%s\n", io_drn[iop->io_drn]);
 	printf("desc_type:\t\t%s\n", desc_types[iop->desc_type]);
 	printf("rbuf_p addr: %p\n", iop->rbuf_p);
@@ -384,11 +384,9 @@ void set_io_type(struct io_cfg *iocfg)
         else if (n > 1 && iop0->iop->io_drn == DST)
                 iocfg->io_type = TYPE_3;
 
-	iop0->iop->io_type_p = &iocfg->io_type;
-        LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
-		iop1->iop->io_type_p = &iocfg->io_type;
-		printf("Setting IOTYPE: %d %d\n", iocfg->io_type, *iop1->iop->io_type_p);
-	}
+	iop0->iop->type_p = &iocfg->io_type;
+        LIST_FOREACH(iop1, &iop0->io_paths, io_paths)
+		iop1->iop->type_p = &iocfg->io_type;
 
 }
 

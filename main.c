@@ -32,10 +32,15 @@ int main(int argc, char *argv[])
 	int		sig;
 	pthread_attr_t  dflt_attrs;
 
+
+
 	sigemptyset(&sig_set);
         sigaddset(&sig_set, SIGTERM);
         sigaddset(&sig_set, SIGHUP);	
 	sigprocmask(SIG_BLOCK, &sig_set, NULL);
+
+	if (signal(SIGPIPE, SIG_IGN) == SIG_ERR)
+            log_syserr("Failed to set SIGINT handler:", errno);
 
 	SIGTERM_STAT = FALSE;
 	SIGHUP_STAT  = FALSE;

@@ -60,22 +60,11 @@ int rbuf_mtx_writeto(struct io_params *iop)
 		iop->io_cnt++;
 		w_ptr = w_ptr->next;
 		continue;
-	    } else if (i == 0) {
-		/* read returned EOF - not an error 
-		* COULD SET UP ASYNC IO NOTIFICATION
-		*/
-		sleep(3);
-		continue;
-	    } else {
-		if ((r = io_error(iop, errno)) == 0) {
-		    sleep(3);
+	    } else if (i <= 0) {
+		if (do_rderr(iop, i, (void *)&w_ptr->mtx_lock) >= 0)
 		    continue;
-		} else if (r == 1) {   /* recv'd EAGAIN or EINTR */
-		    continue;
-		} else {
-		    MTX_UNLOCK(&w_ptr->mtx_lock);
+		else
 		    return -1;
-		}
 	    }
 	}
 }
@@ -110,21 +99,11 @@ int rbuf_mtx_readfrom(struct io_params *iop)
 		    lptr += nw;
 		    iop->bytes += nw;
 		    continue;
-		} else if (nw == 0) {
-		    sleep_unlocked(iop, 3, (void *)r_ptr->mtx_lock);
-		    continue;
-		} else if (nw < 0) {
-		    if ((r = io_error(iop, errno)) == 0) {
-			sleep_unlocked(iop, 3, (void *)r_ptr->mtx_lock);
+		} else if (nw <= 0) {
+		    if (do_wrerr(iop, nw, (void *)&r_ptr->mtx_lock) >= 0)
 			continue;
-		    } else if (r == 1) {   /* recv'd EAGAIN or EINTR */
-			continue;
-		    } else {
-			/* UNKOWN ERROR; * ASSUME DESC INVALID */
-			MTX_UNLOCK(&r_ptr->mtx_lock);
-			log_ret("write() error", errno);
+		    else
 			return -1;
-		    }
 		}
 	    }
         }       
@@ -143,29 +122,18 @@ int rbuf_rwlock_writeto(struct io_params *iop)
 
 	for (;;) {
 	    if ((i = read(iop->io_fd, w_ptr->line, iop->buf_sz)) > 0) {
-/*		log_msg("w_ptr read %d bytes from %d into ringbuff\n", i, iop->io_fd); */
 		w_ptr->len = i;
-	
 		WR_LOCK(&w_ptr->next->rw_lock);
 		RW_UNLOCK(&w_ptr->rw_lock);
-
 		iop->bytes += i;
 		iop->io_cnt++;
 		w_ptr = w_ptr->next;
-	    } else if (i == 0) {
-		/* read returned EOF - not an error */
-		sleep(3);
 		continue;
-	    } else {
-		if ((r = io_error(iop, errno)) == 0) {
-		    sleep(3);
+	    } else if (i <= 0) {
+		if (do_rderr(iop, i, (void *)&w_ptr->mtx_lock) >= 0)
 		    continue;
-		} else if (r == 1) {   /* recv'd EAGAIN or EINTR */
-		    continue;
-		} else {
-		    RW_UNLOCK(&w_ptr->rw_lock);
+		else
 		    return -1;
-		}
 	    }
 	}
 }
@@ -201,21 +169,11 @@ int rbuf_rwlock_readfrom(struct io_params *iop)
 		    lptr += nw;
 		    iop->bytes += nw;
 		    continue;
-		} else if (nw == 0) {
-		    sleep_unlocked(iop, 3, (void *)r_ptr->rw_lock);
-		    continue;
-		} else if (nw < 0) {
-		    /* SOME KNOWN ERROR; WORTH RETRYING? */
-		    if ((r = io_error(iop, errno)) == 0) {
-			sleep_unlocked(iop, 3, (void *)r_ptr->rw_lock);
+		} else if (nw <= 0) {
+		    if (do_wrerr(iop, nw, (void *)&r_ptr->mtx_lock) >= 0)
 			continue;
-		    } else if (r == 1) {   /* recv'd EAGAIN or EINTR */
-			continue;
-		    } else {
-			/* UNKOWN ERROR; * ASSUME DESC INVALID */
-			RW_UNLOCK(&r_ptr->rw_lock);
+		    else
 			return -1;
-		    }
 		}
 	    }
 	}
@@ -254,18 +212,12 @@ int rbuf_t3_readfrom(struct io_params *iop)
 		    lptr += nw;
 		    iop->bytes += nw;
 		    continue;
-		} else if (nw == 0) {
-		    sleep_unlocked(iop, 3, (void *)iop->fd_lock);
-		    continue;
-		} else if (nw < 0) {
-		    if ((r = io_error(iop, errno)) == 0) {
-			sleep_unlocked(iop, 3, (void *)r_ptr->mtx_lock);
-			continue;
-		    } else if (r == 1) {   /* recv'd EAGAIN or EINTR */
+		} else if (nw <= 0) {
+		    MTX_UNLOCK(&iop->fd_lock);
+		    if (do_wrerr(iop, nw, (void *)&r_ptr->mtx_lock) >= 0) {
+			MTX_LOCK(&iop->fd_lock);
 			continue;
 		    } else {
-			MTX_UNLOCK(&iop->fd_lock);
-			MTX_UNLOCK(&r_ptr->mtx_lock);
 			return -1;
 		    }
 		}
@@ -345,24 +297,6 @@ int io_error(struct io_params *iop, int e)
 	}
 }
 
-void sleep_unlocked(struct io_params *iop, int n, void *l)
-{
-	int r;
-	pthread_mutex_t		*mtx;
-	pthread_rwlock_t	*rwlk;
-
-	if (*iop->io_type_p == TYPE_1 || *iop->io_type_p == TYPE_3) {
-	    mtx = (pthread_mutex_t *)l;
-	    MTX_UNLOCK(mtx);
-	    sleep(n);
-	    MTX_LOCK(mtx);
-	} else if (*iop->io_type_p == TYPE_2) {
-	    RW_UNLOCK(rwlk);
-	    sleep(n);
-	    RD_LOCK(rwlk);
-	}
-}
-
 void rbuf_locksync0(struct io_params *iop)
 {
 	int r;
@@ -384,3 +318,88 @@ void rbuf_locksync(struct io_params *iop)
                 pthread_cond_wait(&iop->readable, &iop->listlock);
         MTX_UNLOCK(&iop->listlock);
 }
+
+int do_wrerr(struct io_params *iop, int n, void *lock)
+{
+	int r;
+
+	if (n == 0) {
+	    sleep_unlocked(iop, 3, lock);
+	    return 0;
+	}
+
+	r = io_error(iop, errno);
+	if (r == 1) /* recv'd EAGAIN or EINTR */
+	   return 0;
+	else if (r == 0) {
+	    sleep_unlocked(iop, 3, lock);
+	    return 0;
+	} else {
+	    /* LOG SOMETHING? */
+	    unlock(iop, lock);
+	    return -1;
+	}
+}
+
+void sleep_unlocked(struct io_params *iop, int n, void *l)
+{
+	int r;
+	pthread_mutex_t		*mtx;
+	pthread_rwlock_t	*rwlk;
+
+	printf("sleep_unlocked() called\n");
+
+	if (*iop->type_p == TYPE_1 || *iop->type_p == TYPE_3) {
+	    mtx = (pthread_mutex_t *)l;
+	    MTX_UNLOCK(mtx);
+	    printf("sleeping\n");
+	    sleep(n);
+	    MTX_LOCK(mtx);
+	} else if (*iop->type_p == TYPE_2) {
+	    RW_UNLOCK(rwlk);
+	    sleep(n);
+	    RD_LOCK(rwlk);
+	}
+}
+
+void thrdfatal_err(struct io_params *iop, void *l)
+{
+	int			r;
+	pthread_mutex_t		*mtx;
+	pthread_rwlock_t	*rwlk;
+
+	log_ret("write() error:", errno);  /* WHAT'S ERRNO HERE? */
+	unlock(iop, l);
+}
+
+int do_rderr(struct io_params *iop, int n, void *l)
+{
+	int	r;
+
+	if (n == 0) {
+	    sleep(3);
+	    return 0;
+	}
+
+	if ((r = io_error(iop, errno)) == 0) {
+	    sleep(3);
+	    return 0;
+	} else if (r == 1) {
+	    return 0;
+	} else {
+	    unlock(iop, l);
+	    return -1;
+	}
+}
+
+void unlock(struct io_params *iop, void *l)
+{	
+	int r;
+
+	if (*iop->type_p == TYPE_1 || *iop->type_p == TYPE_3) {
+	    MTX_UNLOCK( (pthread_mutex_t *)l );
+	} else if (*iop->type_p == TYPE_2) {
+	    RW_UNLOCK( (pthread_rwlock_t *)l );
+	}
+}	    
+
