@@ -304,12 +304,6 @@ void print_config_params(struct io_params *iop)
 	printf("nonblock: %d\n", iop->nonblock);
 	printf("io_fd: %d\n", iop->io_fd);
 
-	if (is_src(iop))
-		printf("rbuf_writeto func addr: %p\n", iop->rbuf_writeto);
-	else
-		printf("rbuf_readfrom func addr: %p\n", iop->rbuf_readfrom);
-	
-
 	if (is_sock(iop->desc_type)) {
 		sp = iop->sock_data;
 

@@ -49,11 +49,8 @@ struct rbuf_entry {
 	struct	rbuf_entry	*next;
 };
 
-int rbuf_rwlock_readfrom(struct io_params *);
-int rbuf_rwlock_writeto(struct io_params *);
-
-int rbuf_mtx_readfrom(struct io_params *);
-int rbuf_mtx_writeto(struct io_params *);
+int rbuf_readfrom(struct io_params *);
+int rbuf_writeto(struct io_params *);
 
 int rbuf_t3_readfrom(struct io_params *);
 

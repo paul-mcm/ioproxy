@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
 	sigprocmask(SIG_BLOCK, &sig_set, NULL);
 
 	if (signal(SIGPIPE, SIG_IGN) == SIG_ERR)
-            log_syserr("Failed to set SIGINT handler:", errno);
+            log_syserr("Failed to ignore SIGPIPE:", errno);
 
 	SIGTERM_STAT = FALSE;
 	SIGHUP_STAT  = FALSE;
@@ -106,16 +106,6 @@ void iop_setup(struct io_cfg *iocfg)
 		iop1->iop->io_drn 	= DST;
 	    }
 
-	    if (iocfg->io_type == TYPE_1) {
-		iop0->iop->rbuf_writeto = rbuf_mtx_writeto;
-		LIST_FOREACH(iop1, &iop0->io_paths, io_paths)
-			iop1->iop->rbuf_readfrom = rbuf_mtx_readfrom;
-	    } else if (iocfg->io_type == TYPE_2) {
-		iop0->iop->rbuf_writeto = rbuf_rwlock_writeto;
-		LIST_FOREACH(iop1, &iop0->io_paths, io_paths)
-			iop1->iop->rbuf_readfrom = rbuf_rwlock_readfrom;
-	    }
-
 	} else if (iocfg->io_type == TYPE_3) {
 	    int i = 0;
 	    /* AT THIS POINT, ONLY ONE ITEM IN LIST */
@@ -142,8 +132,6 @@ void iop_setup(struct io_cfg *iocfg)
 		*newiop0->iop->listready = 0;
 
 		newiop0->iop->rbuf_p = new_rbuf(iocfg->io_type, newiop0->iop->buf_sz);
-		newiop0->iop->rbuf_writeto = rbuf_mtx_writeto;
-		newiop1->iop->rbuf_readfrom = rbuf_t3_readfrom;
 		newiop1->iop->io_thread = io_t3_thread;
 
 		newiop0->iop->io_drn	= SRC;
@@ -270,9 +258,9 @@ void *io_t3_thread(void *arg)
 		}
 	    }
 	    if (is_src(iop))
-		r = iop->rbuf_writeto(iop);
+		r = rbuf_writeto(iop);
 	    else
-		r = iop->rbuf_readfrom(iop);
+		r = rbuf_t3_readfrom(iop);
 
 	    if (SIGTERM_STAT == TRUE) {
 		log_msg("SIGTERM_STAT is TRUE\n");
@@ -307,9 +295,9 @@ void *io_thread(void *arg)
 
 		/* BLOCK */
 		if (is_src(iop))
-			r = iop->rbuf_writeto(iop);
+		    r = rbuf_writeto(iop);
 		else
-			r = iop->rbuf_readfrom(iop);
+		    r = rbuf_readfrom(iop);
 
 		/* ONLY HERE IF DESCRIPTOR CLOSED */
 		close(iop->io_fd);

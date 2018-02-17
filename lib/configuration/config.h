@@ -102,10 +102,6 @@ struct io_params {
 	struct iop0_params	*iop0;		/* TYPE 3 ONLY; ELSE NULL */
 
 	struct rbuf_entry	*rbuf_p;
-	int (*rbuf_writeto)(struct io_params *);
-	int (*rbuf_readfrom)(struct io_params *);
-	int (*read_input)(struct io_params *);
-	int (*write_output)(struct io_params *);
 	void *(*io_thread)(void *);
 
 	pthread_t		tid;
