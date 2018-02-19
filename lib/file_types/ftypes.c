@@ -167,12 +167,13 @@ int call_bind(struct io_params *iop)
 	    strcpy(unix_saddr.sun_path, iop->path);
 	    len = offsetof(struct sockaddr_un, sun_path) + strlen(iop->path);
 
-	    if (iop->sock_data->sockio == STREAM) 
+	    if (iop->sock_data->sockio == STREAM) {
 		if ((fd = socket(AF_LOCAL, SOCK_STREAM, 0)) < 0)
 		    log_syserr("Failed to create listening socket:", errno);
-	    else
+	    } else {
 		if ((fd = socket(AF_LOCAL, SOCK_DGRAM, 0)) < 0)
 		    log_syserr("Failed to create listening socket:", errno);
+	    }
 
 	    if ((r = connect(fd, (SA *) &unix_saddr, (socklen_t)sizeof(unix_saddr))) == 0) {
 		log_die("Error: listing socket already listening");
@@ -201,7 +202,7 @@ int call_bind(struct io_params *iop)
 	} else if (iop->desc_type == TCP_SOCK) {
 	    net_saddr.sin_family = AF_INET;
 	    net_saddr.sin_addr.s_addr = htonl(INADDR_ANY);
-/*	    net_saddr.sin_port = htons(iop->sock_data->port); */
+	    net_saddr.sin_port = htons(iop->sock_data->port);
 
 	    fd = socket(AF_INET, SOCK_STREAM, 0);
 

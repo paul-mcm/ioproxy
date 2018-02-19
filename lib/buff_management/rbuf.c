@@ -115,7 +115,6 @@ int rbuf_readfrom(struct io_params *iop)
 	    for (;;) {
 		lptr = r_ptr->line;
 		nleft = r_ptr->len;
-
 		while (nleft > 0) {
 		    nw = write(iop->io_fd, lptr, r_ptr->len);
 		    if (nw == r_ptr->len) {
@@ -143,7 +142,6 @@ int rbuf_readfrom(struct io_params *iop)
 	    for (;;) {
 		lptr = r_ptr->line;
 		nleft = r_ptr->len;
-
 		while (nleft > 0) {
 		    nw = write(iop->io_fd, lptr, r_ptr->len);
 		    if (nw == r_ptr->len) {
