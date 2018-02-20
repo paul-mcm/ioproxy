@@ -70,12 +70,17 @@ int fill(char *f, char *v, struct io_params *iop)
 
 	if ( strcasecmp(f, "type") == 0 ) {
 	    /* XXX DOESN'T CHECK FOR ERROR */
-	    if (set_desc_t(v, iop) != 0)
+	    if (set_desc_t(v, iop) != 0) {
 		log_die("Error setting type\n");
-		
-	    if (is_sock(iop->desc_type))
+	    }
+	    if (is_sock(iop)) {
 		iop->sock_data = sock_param_alloc();
-
+	    }
+	    if (iop->desc_type == TCP_SOCK) {
+		iop->sock_data->sockio = STREAM;
+	    } else if (iop->desc_type == UDP_SOCK || iop->desc_type == UNIX_SOCK) {
+		iop->sock_data->sockio = DGRAM;
+	    }
 	} else if (strcasecmp(f, "dir") == 0) {
 	    if (strcasecmp(v, "src") == 0)
 		iop->io_drn = SRC;
@@ -108,8 +113,11 @@ int fill(char *f, char *v, struct io_params *iop)
 	else if (strcasecmp(f, "nonblock") == 0)
 		err = set_nonblock(v, iop);
  	else if (strcasecmp(f, "port") == 0) {
-		iop->sock_data->port = malloc(strlen(v) + 1);
-		strncpy(iop->sock_data->port, v, strlen(v) + 1);
+		iop->sock_data->tls_port = malloc(strlen(v) + 1);
+		strncpy(iop->sock_data->tls_port, v, strlen(v) + 1);
+		iop->sock_data->port = strtonum(v, 1, 65535, &s);
+		if (s != NULL)
+		    log_syserr("strtonum() error: %s\n", s);
 	} else if (strcasecmp(f, "tls") == 0)
 		iop->sock_data->tls = TRUE;
 	else if (strcasecmp(f, "cacert") == 0) {
@@ -118,6 +126,12 @@ int fill(char *f, char *v, struct io_params *iop)
 	} else if (strcasecmp(f, "cacertdir") == 0) {
 		iop->sock_data->cacert_dirpath = malloc(strlen(v) + 1);
 		strncpy(iop->sock_data->cacert_dirpath, v, strlen(v));
+	} else if (strcasecmp(f, "srvr_cert") == 0) {
+		iop->sock_data->srvr_cert = malloc(strlen(v) + 1);
+		strlcpy(iop->sock_data->srvr_cert, v, strlen(v) + 1);
+	} else if (strcasecmp(f, "srvr_key") == 0) {
+		iop->sock_data->srvr_key = malloc(strlen(v) + 1);
+		strlcpy(iop->sock_data->srvr_key, v, strlen(v) + 1);
 	} else if (strcasecmp(f, "reqcrt") == 0) {
 		if (strcasecmp(v, "demand") == 0)
 		    iop->sock_data->cert_strtgy = DEMAND;
@@ -192,22 +206,22 @@ int set_desc_t(char *t, struct io_params *iop)
 	int err = 0;
 
 	if (strcasecmp(t, "FIFO") == 0)
-		iop->desc_type = FIFO;
+	    iop->desc_type = FIFO;
 	else if (strcasecmp(t, "FILE") == 0)
-		iop->desc_type = REG_FILE;
+	    iop->desc_type = REG_FILE;
 	else if (strcasecmp(t, "STDIN") == 0)
-		iop->desc_type = STDIN;
-        else if (strcasecmp(t, "STDOUT") == 0)
-		iop->desc_type = STDOUT;
-        else if (strcasecmp(t, "TCP_SOCK") == 0)
-		iop->desc_type = TCP_SOCK;
-        else if (strcasecmp(t, "UDP_SOCK") == 0)
-		iop->desc_type = UDP_SOCK;
-	else if (strcasecmp(t, "UNIX_SOCK") == 0)
-		iop->desc_type = UNIX_SOCK;
-	else {
-		log_msg("unknown type: %s\n", t);
-		err = -1;
+	    iop->desc_type = STDIN;
+	else if (strcasecmp(t, "STDOUT") == 0)
+	    iop->desc_type = STDOUT;
+	else if (strcasecmp(t, "TCP_SOCK") == 0) {
+	    iop->desc_type = TCP_SOCK;
+	} else if (strcasecmp(t, "UDP_SOCK") == 0) {
+	    iop->desc_type = UDP_SOCK;
+	} else if (strcasecmp(t, "UNIX_SOCK") == 0) {
+	    iop->desc_type = UNIX_SOCK;
+	} else {
+	    log_msg("unknown type: %s\n", t);
+	    err = -1;
 	}
 	return err;
 }

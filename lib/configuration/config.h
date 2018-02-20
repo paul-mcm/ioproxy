@@ -31,6 +31,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <syslog.h>
 #include <unistd.h>
 
@@ -83,11 +84,15 @@ struct sock_param {
 	int		tls;
         char		*ip;
 	int		listenfd;
-        char	     	*port;
+        char	     	*tls_port;
+	uint32_t	port;
         char    	*hostname;
 	char		*sockpath;
 	char		*cacert_path;
 	char		*cacert_dirpath;
+	char		*srvr_cert;
+	char		*srvr_key;
+	struct tls	*tls_ctx;	
 	T_CERTSTRTGY	cert_strtgy;
 };
 
@@ -157,8 +162,8 @@ int set_desc_t(char *, struct io_params *);
 int set_ioblock(char *, struct io_params *);
 
 int parse_tuple(char *, char *);
-int is_sock(int);
-int is_netsock(int);
+int is_sock(struct io_params *);
+int is_netsock(struct io_params *);
 int is_src(struct io_params *);
 int is_dst(struct io_params *);
 
@@ -186,6 +191,8 @@ void free_sock_param(struct sock_param *);
 int unix_sockopen(struct io_params *);
 int net_sockopen(struct io_params *);
 
-int validate_iop(struct io_params *);
+int validate_cfg(struct io_cfg *);
+void validate_iop(struct io_params *);
+void validate_sockparams(struct io_params *);
 
 #endif

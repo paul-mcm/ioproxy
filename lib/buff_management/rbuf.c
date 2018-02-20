@@ -110,7 +110,7 @@ int rbuf_readfrom(struct io_params *iop)
 	} else {
 	    RD_LOCK(&r_ptr->rw_lock);
 	}
-
+	printf("WRITING TO DESC %d\n", iop->io_fd);
 	if (*iop->type_p != TYPE_2) {
 	    for (;;) {
 		lptr = r_ptr->line;

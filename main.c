@@ -32,7 +32,8 @@ int main(int argc, char *argv[])
 	int		sig;
 	pthread_attr_t  dflt_attrs;
 
-
+	if (tls_init() < 0)
+	    log_die("tls_init() error\n");
 
 	sigemptyset(&sig_set);
         sigaddset(&sig_set, SIGTERM);
@@ -53,10 +54,13 @@ int main(int argc, char *argv[])
 	 */
 
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
-		iop_setup(iocfg);
+	    validate_cfg(iocfg);
 
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
-		show_config(iocfg);
+	    iop_setup(iocfg);
+
+	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
+	    show_config(iocfg);
 
         if ((r = pthread_attr_init(&dflt_attrs)) != 0)
             log_die("Error initing thread attrs: %d\n", r);
@@ -276,10 +280,12 @@ void *io_t3_thread(void *arg)
 void *io_thread(void *arg)
 {
 	struct io_params	*iop;
-	int			r;
+	struct sock_param	*sop;
 	sigset_t		sig_set;
+	int			r;
 
 	iop = (struct io_params *)arg;
+	sop = iop->sock_data;
 
 	set_thrd_sigmask(&sig_set);
 	pthread_cleanup_push(release_mtx, iop);
@@ -300,8 +306,13 @@ void *io_thread(void *arg)
 		    r = rbuf_readfrom(iop);
 
 		/* ONLY HERE IF DESCRIPTOR CLOSED */
-		close(iop->io_fd);
-		iop->io_fd = -1;
+	 	if (is_netsock(iop) && sop->conn_type == LISTEN) {
+		    close(sop->listenfd);
+		    sop->listenfd = -1;
+		} else {
+		    close(iop->io_fd);
+		    iop->io_fd = -1;
+		}
 
 		if (SIGTERM_STAT == TRUE) {
 			log_msg("SIGTERM_STAT is TRUE\n");

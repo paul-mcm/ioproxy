@@ -136,46 +136,55 @@ int open_file(struct io_params *iop)
 
 int open_sock(struct io_params *iop)
 {
-	/* LOCAL? NETWORK? */
-	/* LISTEN? CONNECT? */
-        /* RETURN INT FOR io_fd */
-	int fd;
-	
-	if (iop->sock_data->conn_type == LISTEN) {
-	    if ((iop->sock_data->listenfd = call_bind(iop)) < 0)
-		log_msg("error binding socket");
+	int 			r;
+	struct sock_param	*sop;
 
-	    return call_accept(iop);
-	} else {
+	sop = iop->sock_data;
+
+	if (sop->conn_type == CONNECT) {
 	    return call_connect(iop);
+	} else {
+	    if (sop->listenfd < 0) {
+		if ((sop->listenfd = call_bind(iop)) < 0)
+		    log_msg("error binding socket");
+	    }
+
+	    if ((r = call_accept(iop)) < 0)
+		return r;
+
+	    if (sop->tls == TRUE && call_tls_accept(iop) < 0) {
+		log_msg("call_tls_accept() failed\n");
+		close(r);
+		return -1;
+	    } else {
+		return r;
+	    }
 	}
 }	
 
 int call_bind(struct io_params *iop)
 {
-	int len, fd, r;
-	struct sockaddr_un      unix_saddr;
+	int			lfd, r, opt;
+	struct sockaddr_un      u_saddr;
 	struct sockaddr_in      net_saddr;
 	mode_t                  old_umask;
+	socklen_t		len;
 
-        memset(&unix_saddr, 0, sizeof(struct sockaddr_un));
-        memset(&net_saddr, 0, sizeof(struct sockaddr_in));
+        memset(&u_saddr, 0, sizeof(struct sockaddr_un));
 
 	if (iop->desc_type == UNIX_SOCK) {
+	    u_saddr.sun_family = AF_LOCAL;
 
-	    unix_saddr.sun_family = AF_LOCAL;
-	    strcpy(unix_saddr.sun_path, iop->path);
+	    if (strlcpy(u_saddr.sun_path, iop->path,
+		sizeof(u_saddr.sun_path)) >= sizeof(u_saddr.sun_path))
+		    log_die("error: %s - name too long\n", iop->path);
+
 	    len = offsetof(struct sockaddr_un, sun_path) + strlen(iop->path);
 
-	    if (iop->sock_data->sockio == STREAM) {
-		if ((fd = socket(AF_LOCAL, SOCK_STREAM, 0)) < 0)
-		    log_syserr("Failed to create listening socket:", errno);
-	    } else {
-		if ((fd = socket(AF_LOCAL, SOCK_DGRAM, 0)) < 0)
-		    log_syserr("Failed to create listening socket:", errno);
-	    }
+	    if ((lfd = socket(AF_LOCAL, SOCK_DGRAM, 0)) < 0)
+		log_syserr("Failed to create listening socket:", errno);
 
-	    if ((r = connect(fd, (SA *) &unix_saddr, (socklen_t)sizeof(unix_saddr))) == 0) {
+	    if ((r = connect(lfd, (SA *)&u_saddr, sizeof(u_saddr))) == 0) {
 		log_die("Error: listing socket already listening");
 	    } else if (r == -1 && errno != ENOENT) {
 		if (unlink(iop->path) != 0)
@@ -184,7 +193,7 @@ int call_bind(struct io_params *iop)
 
 	    old_umask = umask(S_IXUSR|S_IXGRP|S_IXOTH);
 
-	    if (bind(fd, (SA *) &unix_saddr, len) < 0) {
+	    if (bind(lfd, (SA *)&u_saddr, len) < 0) {
 		(void)umask(old_umask);
 		log_syserr("Error binding to socket:", errno);
 	    }
@@ -196,25 +205,56 @@ int call_bind(struct io_params *iop)
 		log_syserr("chmod error: %d %s", errno, strerror(errno));
 	    }
 
-	    if (listen(fd, LISTENQ) < 0)
+	    if (listen(lfd, LISTENQ) < 0)
 		log_syserr("Call to listen call failed:", errno);
 
 	} else if (iop->desc_type == TCP_SOCK) {
+	    bzero(&net_saddr, sizeof(net_saddr));
 	    net_saddr.sin_family = AF_INET;
 	    net_saddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	    net_saddr.sin_port = htons(iop->sock_data->port);
 
-	    fd = socket(AF_INET, SOCK_STREAM, 0);
+	    if ((lfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+		log_syserr("socket() error: ");
 
-	    if (bind(fd, (SA *) &net_saddr, sizeof(net_saddr)) < 0)
-		log_syserr("bind() error: %s", errno);
+	    if (setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR, (void *)1, sizeof(int)) == -1)
+		log_syserr("setsockopt failure");
 
-	    if (listen(fd, 1) != 0)
-		log_syserr("listen() error: %s", errno);
+	    if (bind(lfd, (SA *) &net_saddr, sizeof(net_saddr)) < 0)
+		log_syserr("bind() error");
+
+	    if (listen(lfd, 1) != 0)
+		log_syserr("listen() error");
 
 	}
+	return lfd;
+}
 
-	return fd;
+int call_tls_accept(struct io_params *iop)
+{
+	struct tls_config	*tls_cfg;
+	struct tls		*tls;
+	struct sock_param	*sop;
+
+	sop = iop->sock_data;
+
+	if ((tls_cfg = tls_config_new()) == NULL)
+            log_die("tls_config_new error\n");
+
+        tls_config_set_keypair_file(tls_cfg, sop->srvr_cert, sop->srvr_key);
+
+        if ((tls = tls_server()) == NULL)
+	    log_die("tls_server() error\n");
+
+        tls_configure(tls, tls_cfg);
+
+	if (tls_accept_socket(tls, &sop->tls_ctx, iop->io_fd) < 0) {
+	    log_msg("tls_accept_socket() error %s\n", tls_error(tls));
+	    return -1;
+	} else {
+	    log_msg("tls_accept_socket() success!\n");
+	    return 0;
+	}
 }
 
 int call_accept(struct io_params *iop)
@@ -227,7 +267,6 @@ int call_accept(struct io_params *iop)
 	    clilen = offsetof(struct sockaddr_un, sun_path) + \
 		strlen(iop->sock_data->sockpath);
 	}
-
 	if ((sd = accept(iop->sock_data->listenfd, (SA *) &cliaddr, &clilen)) < 0) {
 	    if (errno == ECONNABORTED) {
 		log_ret("accept() error: %s", strerror(errno));
@@ -242,21 +281,19 @@ int call_accept(struct io_params *iop)
 
 int call_connect(struct io_params *iop)
 {
-	struct sockaddr_un	unix_saddr;
+	struct sockaddr_un	u_saddr;
 	int			len, fd;
 
 	if (iop->desc_type == UNIX_SOCK) {
 	    fd = socket(AF_UNIX, SOCK_STREAM, 0);
-	    bzero(&unix_saddr, sizeof(unix_saddr));
-	    unix_saddr.sun_family = AF_UNIX;
-	    strlcpy(unix_saddr.sun_path, iop->path, sizeof(unix_saddr.sun_path));
+	    bzero(&u_saddr, sizeof(u_saddr));
+	    u_saddr.sun_family = AF_UNIX;
+	    strlcpy(u_saddr.sun_path, iop->path, sizeof(u_saddr.sun_path));
 	    len = offsetof(struct sockaddr_un, sun_path) + strlen(iop->path);
 
-	    return do_localconnect(fd, (SA *)&unix_saddr, len);
+	    return do_localconnect(fd, (SA *)&u_saddr, len);
 
-	} else if (iop->desc_type == TCP_SOCK) {
-	    return do_netconnect(iop);
-	} else if (iop->desc_type == UDP_SOCK) {
+	} else if (is_netsock(iop)) {
 	    return do_netconnect(iop);
 	}
 }
@@ -282,8 +319,27 @@ int do_localconnect(int fd, struct sockaddr *saddr, int l)
 
 int do_netconnect(struct io_params *iop)
 {
-	int		fd, r;
-	struct addrinfo	hints, *res, *ressave;
+	int			fd, r;
+	struct addrinfo		hints, *res, *ressave;
+	struct sock_param	*sop;
+	struct tls_config	*tls_cfg;
+	struct tls		*tls;
+
+	sop = iop->sock_data;
+
+	if (sop->tls == TRUE) {
+	    if ((tls_cfg = tls_config_new()) == NULL) {
+		log_die("tls_config_new error: %s\n", tls_config_error(tls_cfg));
+	    } else {
+		if (sop->cacert_path != NULL)
+		    tls_config_set_ca_file(tls_cfg, sop->cacert_path);
+
+		if (iop->sock_data->cacert_dirpath != NULL)
+		    tls_config_set_ca_path(tls_cfg, sop->cacert_dirpath);
+
+		tls = sop->tls_ctx;
+	    }
+	}
 
 	bzero(&hints, sizeof(struct addrinfo));
 	hints.ai_family = AF_INET;
@@ -293,7 +349,7 @@ int do_netconnect(struct io_params *iop)
 	    hints.ai_socktype = SOCK_STREAM;
 
 	for (;;) {
-	    if ((r = getaddrinfo(iop->sock_data->hostname, iop->sock_data->port, &hints, &res)) != 0) { 
+	    if ((r = getaddrinfo(sop->hostname, NULL, &hints, &res)) != 0) { 
 		log_msg("getaddrinfo() error: %s", gai_strerror(r));
 		exit(-1); /* XXX REALLY */
 	    } else {
@@ -301,17 +357,32 @@ int do_netconnect(struct io_params *iop)
 	    }
 
 	    do {
-		if ((fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0) {
-		    log_ret("socket() error");
-		    continue;
-		}
+		if (sop->tls == TRUE) {
+		    tls = tls_client();
+		    tls_configure(tls, tls_cfg);
 
-		if (connect(fd, res->ai_addr, res->ai_addrlen) != 0) {
-		    log_ret("connect() error");
-		    close(fd);
-		    continue;
+		    if (tls_connect(tls, sop->hostname, sop->tls_port) != 0) {
+			log_msg("tls_connect() error\n", tls_error(tls));
+			tls_close(tls);
+			tls_free(tls);
+			continue;
+		    } else {
+			log_msg("tls_connect() success!\n");
+			return 0;
+		    }
 		} else {
-		    break;
+		    if ((fd = socket(res->ai_family, res->ai_socktype, \
+				res->ai_protocol)) < 0) {
+			log_ret("socket() error");
+			continue;
+		    }
+
+		    if (connect(fd, res->ai_addr, res->ai_addrlen) != 0) {
+			log_ret("connect() error");
+			continue;
+		    } else {
+			break;
+		    }
 		}
 	    } while ((res = res->ai_next) != NULL);
 

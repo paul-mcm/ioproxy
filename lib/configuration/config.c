@@ -152,15 +152,6 @@ struct iop0_params * parse_iop0_stanza(FILE *f)
 	iop0 = iop0_alloc();
 	iop0->iop = iop_alloc();
 
-	if ((ln = fetch_next_line(f)) != NULL) {
-		p = clean_line(ln);
-	} else {
-		log_msg("fetch_next_line() returned NULL\n");
-	}
-
-	fseek(f, -strlen(ln), SEEK_CUR);
-	free(ln);
-
         while ((ln = fetch_next_line(f)) != NULL) {
 		p = clean_line(ln);
 		/* '(' character signals end of stanza */
@@ -176,6 +167,7 @@ struct iop0_params * parse_iop0_stanza(FILE *f)
 		}
 	}
 
+	free(ln);
 	return iop0;
 } 
 
@@ -237,20 +229,20 @@ int is_src(struct io_params *iop)
 		return 0;
 }
 
-int is_sock(int n)
+int is_sock(struct io_params *iop)
 {
-        if ((n == UDP_SOCK) || \
-	    (n == TCP_SOCK) || \
-	    (n == UNIX_SOCK)) 
+        if ((iop->desc_type == UDP_SOCK) || \
+	    (iop->desc_type == TCP_SOCK) || \
+	    (iop->desc_type == UNIX_SOCK))
                 return 1; 
         else 
                 return 0; 
 }
 
-int is_netsock(int n)
+int is_netsock(struct io_params *iop)
 {
-        if ((n == UDP_SOCK) || \
-	    (n == TCP_SOCK))
+        if ((iop->desc_type == UDP_SOCK) || \
+	    (iop->desc_type == TCP_SOCK))
                 return 1; 
         else 
                 return 0; 
@@ -304,25 +296,30 @@ void print_config_params(struct io_params *iop)
 	printf("nonblock: %d\n", iop->nonblock);
 	printf("io_fd: %d\n", iop->io_fd);
 
-	if (is_sock(iop->desc_type)) {
+	if (is_sock(iop)) {
+		printf("----- sock_data -----\n");
 		sp = iop->sock_data;
 
-		printf("conn_type: %s\n", 	conn_type[sp->conn_type]);
-		printf("sockio: %s\n", 		sockio[sp->sockio]);
-		printf("ip: %s\n", 		sp->ip != 0 ? sp->ip : NULL);
-		printf("port: %s\n", 		sp->port != 0 ? sp->port : 0);
+		printf("\tconn_type: %s\n", 	conn_type[sp->conn_type]);
+		printf("\tsockio: %s\n", 		sockio[sp->sockio]);
+		printf("\tip: %s\n", 		sp->ip != 0 ? sp->ip : NULL);
+		printf("\tport: %d\n", 		sp->port != 0 ? sp->port : 0);
 		if (iop->sock_data->hostname != NULL)
-			printf("hostname: %s\n", sp->hostname);
-
+			printf("\thostname: %s\n", sp->hostname);
 		if (sp->sockpath != NULL)
-			printf("sockpath: %s\n", sp->sockpath);
+			printf("\tsockpath: %s\n", sp->sockpath);
 		if (sp->tls == TRUE) {
-		    printf("tls = TRUE\n");
+		    printf("\ttls = TRUE\n");
+		    printf("\ttls_port: %s\n", sp->tls_port);
 		    if (sp->cacert_path != NULL)
-			printf("cacertpath: %s\n", sp->cacert_path);
+			printf("\tcacertpath: %s\n", sp->cacert_path);
 		    if (sp->cacert_dirpath != NULL)
-			printf("cacertdir: %s\n", sp->cacert_dirpath);
-		    printf("cert_strtgy: %s\n", cert_strtgy[sp->cert_strtgy]);
+			printf("\tcacertdir: %s\n", sp->cacert_dirpath);
+		    printf("\tcert_strtgy: %s\n", cert_strtgy[sp->cert_strtgy]);
+		    if (sp->srvr_cert != NULL)
+			printf("\tsrvr_cert: %s\n", sp->srvr_cert);
+		    if (sp->srvr_key != NULL)
+			printf("\tsrvr_key: %s\n", sp->srvr_key);
 		}
 	}
 
@@ -485,6 +482,7 @@ struct sock_param *sock_param_alloc()
 	sd->hostname	= NULL;
 	sd->sockpath	= NULL;
 	sd->ip		= NULL;
+	sd->listenfd	= -1;
 
 	return sd;
 }
@@ -529,10 +527,56 @@ void free_iop(struct io_params *iop)
 	free(iop);
 }
 
-int validate_iop(struct io_params *iop)
+int validate_cfg(struct io_cfg *iocfg)
 {
+	struct iop0_params	*iop0;
+	struct iop1_params	*iop1;
 
-	if (iop->desc_type == UDP_SOCK && iop->sock_data->conn_type == LISTEN)
-	   log_die("Config error: No udp listening sockets");
+	iop0 = LIST_FIRST(&iocfg->iop0_paths);
+	validate_iop(iop0->iop);
 
+	LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
+	    validate_iop(iop1->iop);
+	}
+}
+
+void validate_iop(struct io_params *iop)
+{
+	if (iop->desc_type == TCP_SOCK || iop->desc_type == UDP_SOCK)
+	    validate_sockparams(iop);
+}
+
+void validate_sockparams(struct io_params *iop)
+{
+	struct sock_param *sop;
+	sop = iop->sock_data;
+
+	if (iop->desc_type == TCP_SOCK)
+	    sop->sockio == STREAM;
+	else if (iop->desc_type == TCP_SOCK || iop->desc_type == UDP_SOCK || UNIX_SOCK)
+	    sop->sockio == DGRAM;
+
+	if (sop->conn_type == LISTEN) {
+	    if (iop->desc_type == UDP_SOCK)
+		log_die("Config error: No udp listening sockets");
+	    if (sop->hostname != NULL)
+		log_msg("Config notice: hostnames ignored for server listening sockets\n");
+	}
+
+	if (sop->conn_type == CONNECT) {
+	    if (iop->desc_type != UNIX_SOCK && sop->hostname == NULL)
+		log_die("config error: hostname required for tcp sockets\n");
+	}
+
+	if (sop->tls == TRUE) {
+	    if (sop->conn_type == CONNECT && sop->cacert_path == NULL && sop->cacert_dirpath == NULL)
+		log_die("TLS requires a CA cert path CA cert directory\n");
+
+	    if (sop->conn_type == LISTEN && sop->srvr_cert == NULL)
+		log_die("Server TLS requires filenames for server's certificate\n");
+
+	    if (sop->conn_type == LISTEN && sop->srvr_key == NULL)
+		log_die("Server TLS requires filenames for server's private key\n");
+
+	}
 }

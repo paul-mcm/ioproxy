@@ -1,7 +1,7 @@
 objects = rbuf.o config.o parse_line.o ftypes.o error.o
 
 all: $(objects)
-	@gcc -g -pthread -o ioproxy main.c $(objects) 
+	@gcc -g -ltls -pthread -o ioproxy main.c $(objects) 
 	@rm -f $(objects)
 
 rbuf.o: lib/buff_management/rbuf.h
