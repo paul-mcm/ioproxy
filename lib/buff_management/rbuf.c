@@ -312,6 +312,53 @@ int rbuf_readfrom(struct io_params *iop)
 	}
 }
 
+int rbuf_t3_tlsreadfrom(struct io_params *iop)
+{
+        struct rbuf_entry 	*r_ptr;
+	struct sock_param	*sop;
+	char			*lptr;
+        int 			r, nw, nleft;
+
+	r_ptr = iop->rbuf_p;
+	sop = iop->sock_data;
+
+	rbuf_locksync(iop);
+	MTX_LOCK(&r_ptr->mtx_lock);
+	MTX_LOCK(&iop->fd_lock);
+	
+        for (;;) {
+	    lptr = r_ptr->line;
+	    nleft = r_ptr->len;
+	    while (nleft > 0) {
+		nw = tls_write(sop->tls_ctx, lptr, r_ptr->len);
+		if (nw == r_ptr->len) {
+		    MTX_UNLOCK(&iop->fd_lock);
+		    nleft -= nw;
+		    iop->bytes += nw;
+		    iop->io_cnt++;
+		    MTX_LOCK(&r_ptr->next->mtx_lock);
+		    MTX_UNLOCK(&r_ptr->mtx_lock);
+		    MTX_LOCK(&iop->fd_lock);
+		    r_ptr = r_ptr->next;
+		    continue;
+		} else if (nw < r_ptr->len && nw > 0) {
+		    nleft -= nw;
+		    lptr += nw;
+		    iop->bytes += nw;
+		    continue;
+		} else if (nw <= 0) {
+		    MTX_UNLOCK(&iop->fd_lock);
+		    if (do_wrerr(iop, nw, (void *)&r_ptr->mtx_lock) >= 0) {
+			MTX_LOCK(&iop->fd_lock);
+			continue;
+		    } else {
+			return -1;
+		    }
+		}
+	    }
+	}      
+}
+
 int rbuf_t3_readfrom(struct io_params *iop)
 {
         struct rbuf_entry *r_ptr;

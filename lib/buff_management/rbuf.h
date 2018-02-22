@@ -56,6 +56,7 @@ int rbuf_tls_writeto(struct io_params *);
 int rbuf_tls_readfrom(struct io_params *);
 
 int rbuf_t3_readfrom(struct io_params *);
+int rbuf_t3_tlsreadfrom(struct io_params *);
 
 void unlock(struct io_params *, void *);
 

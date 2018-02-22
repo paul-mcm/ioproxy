@@ -261,8 +261,12 @@ void *io_t3_thread(void *arg)
 		    pthread_mutex_unlock(&iop->fd_lock);
 		}
 	    }
+
+
 	    if (is_src(iop))
 		r = rbuf_writeto(iop);
+	    else if (use_tls(iop))
+		r = rbuf_t3_tlsreadfrom(iop);
 	    else
 		r = rbuf_t3_readfrom(iop);
 
