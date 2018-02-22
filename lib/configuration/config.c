@@ -16,12 +16,12 @@
 #include "config.h"
 #include "parse_line.h"
 
+const char *tr_fls[] = { "FALSE", "TRUE" };
 const char *desc_types[] = { "REG_FILE", "FIFO", "STDOUT", "STDIN", "UNIX_SOCK", "TCP_SOCK", "UDP_SOCK"};
 const char *io_drn[] = { "SRC", "DST" };
 const char *io_types[] = {"TYPE_1", "TYPE_2", "TYPE_3"};
 const char *conn_type[] = { "CONNECT", "LISTEN" };
 const char *sockio[] = { "DGRAM", "STREAM" };
-const char *cert_strtgy[] = {"DEMAND", "NEVER", "TRY", "ALLOW"};
 
 int read_config(struct all_cfg_list *all)
 {
@@ -248,6 +248,14 @@ int is_netsock(struct io_params *iop)
                 return 0; 
 }
 
+int use_tls(struct io_params *iop)
+{
+	if (iop->sock_data != NULL && iop->sock_data->tls == TRUE)
+	    return 1;
+	else
+	    return 0;
+}
+
 int show_config(struct io_cfg *iocfg)
 {
 	struct iop0_params *iop0;
@@ -279,7 +287,7 @@ int show_all_configs(struct all_cfg_list *all)
 
 void print_config_params(struct io_params *iop)
 {
-	struct sock_param *sp;
+	struct sock_param *sop;
 
 	printf("type_p\t\t%s\n", io_types[*iop->type_p]);
 	printf("io_drn:\t\t%s\n", io_drn[iop->io_drn]);
@@ -298,28 +306,30 @@ void print_config_params(struct io_params *iop)
 
 	if (is_sock(iop)) {
 		printf("----- sock_data -----\n");
-		sp = iop->sock_data;
+		sop = iop->sock_data;
 
-		printf("\tconn_type: %s\n", 	conn_type[sp->conn_type]);
-		printf("\tsockio: %s\n", 		sockio[sp->sockio]);
-		printf("\tip: %s\n", 		sp->ip != 0 ? sp->ip : NULL);
-		printf("\tport: %d\n", 		sp->port != 0 ? sp->port : 0);
+		printf("\tconn_type: %s\n", 	conn_type[sop->conn_type]);
+		printf("\tsockio: %s\n", 		sockio[sop->sockio]);
+		printf("\tip: %s\n", 		sop->ip != 0 ? sop->ip : NULL);
+		printf("\tport: %d\n", 		sop->port != 0 ? sop->port : 0);
 		if (iop->sock_data->hostname != NULL)
-			printf("\thostname: %s\n", sp->hostname);
-		if (sp->sockpath != NULL)
-			printf("\tsockpath: %s\n", sp->sockpath);
-		if (sp->tls == TRUE) {
+			printf("\thostname: %s\n", sop->hostname);
+		if (sop->sockpath != NULL)
+			printf("\tsockpath: %s\n", sop->sockpath);
+		if (sop->tls == TRUE) {
 		    printf("\ttls = TRUE\n");
-		    printf("\ttls_port: %s\n", sp->tls_port);
-		    if (sp->cacert_path != NULL)
-			printf("\tcacertpath: %s\n", sp->cacert_path);
-		    if (sp->cacert_dirpath != NULL)
-			printf("\tcacertdir: %s\n", sp->cacert_dirpath);
-		    printf("\tcert_strtgy: %s\n", cert_strtgy[sp->cert_strtgy]);
-		    if (sp->srvr_cert != NULL)
-			printf("\tsrvr_cert: %s\n", sp->srvr_cert);
-		    if (sp->srvr_key != NULL)
-			printf("\tsrvr_key: %s\n", sp->srvr_key);
+		    printf("\ttls_port: %s\n", sop->tls_port);
+		    if (sop->cacert_path != NULL)
+			printf("\tcacertpath: %s\n", sop->cacert_path);
+		    if (sop->cacert_dirpath != NULL)
+			printf("\tcacertdir: %s\n", sop->cacert_dirpath);
+
+		    printf("\tcert_vrfy: %s\n", tr_fls[sop->cert_vrfy]);
+
+		    if (sop->srvr_cert != NULL)
+			printf("\tsrvr_cert: %s\n", sop->srvr_cert);
+		    if (sop->srvr_key != NULL)
+			printf("\tsrvr_key: %s\n", sop->srvr_key);
 		}
 	}
 
@@ -483,7 +493,7 @@ struct sock_param *sock_param_alloc()
 	sd->sockpath	= NULL;
 	sd->ip		= NULL;
 	sd->listenfd	= -1;
-
+	sd->cert_vrfy	= TRUE;
 	return sd;
 }
 
@@ -563,8 +573,8 @@ void validate_sockparams(struct io_params *iop)
 		log_msg("Config notice: hostnames ignored for server listening sockets\n");
 	}
 
-	if (sop->conn_type == CONNECT) {
-	    if (iop->desc_type != UNIX_SOCK && sop->hostname == NULL)
+	if (is_netsock(iop) && sop->conn_type == CONNECT) {
+	    if (sop->hostname == NULL && sop->ip == NULL)
 		log_die("config error: hostname required for tcp sockets\n");
 	}
 
@@ -577,6 +587,9 @@ void validate_sockparams(struct io_params *iop)
 
 	    if (sop->conn_type == LISTEN && sop->srvr_key == NULL)
 		log_die("Server TLS requires filenames for server's private key\n");
+
+	    if (iop->desc_type == UDP_SOCK && sop->tls == TRUE)
+		log_die("Config errer: no TLS available for UDP sockets");
 
 	}
 }

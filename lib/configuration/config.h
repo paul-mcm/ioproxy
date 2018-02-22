@@ -71,13 +71,6 @@ typedef enum {
 	STREAM = 4,
 } T_SOCKIO;
 
-typedef enum {
-	DEMAND,
-	NEVER,
-	TRY,
-	ALLOW,
-} T_CERTSTRTGY;
-
 struct sock_param {
         T_SOCK		conn_type;
         T_SOCKIO	sockio;
@@ -93,7 +86,7 @@ struct sock_param {
 	char		*srvr_cert;
 	char		*srvr_key;
 	struct tls	*tls_ctx;	
-	T_CERTSTRTGY	cert_strtgy;
+	int		cert_vrfy;
 };
 
 /* s - shared
@@ -166,6 +159,7 @@ int is_sock(struct io_params *);
 int is_netsock(struct io_params *);
 int is_src(struct io_params *);
 int is_dst(struct io_params *);
+int use_tls(struct io_params *);
 
 int valid_path(char *, struct stat *);  /* VALIDATE PATH */
 int valid_ftype(int, struct stat *); /* VALIDATE FILE TYPE */

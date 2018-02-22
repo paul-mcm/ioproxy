@@ -40,6 +40,150 @@ if ((r = pthread_mutex_unlock(m)) != 0) {       \
     log_die("mtx unlock error:  %d\n", r);      \
 }
 
+int rbuf_tls_writeto(struct io_params *iop)
+{
+	struct sock_param	*sop;
+	struct rbuf_entry	*w_ptr;
+	int 			i, r;
+
+	sop = iop->sock_data;
+	w_ptr = iop->rbuf_p;
+
+	/* THIS THREAD MUST GET THE LOCK FIRST */
+	if (*iop->type_p != TYPE_2) {
+	    MTX_LOCK(&w_ptr->mtx_lock);
+	} else {
+	    WR_LOCK(&w_ptr->rw_lock);
+	}
+
+	rbuf_locksync0(iop);
+
+	if (*iop->type_p != TYPE_2) {
+	    for (;;) {
+		if ((w_ptr->len = tls_read(sop->tls_ctx, w_ptr->line, iop->buf_sz)) > 0) {
+		    MTX_LOCK(&w_ptr->next->mtx_lock);
+		    MTX_UNLOCK(&w_ptr->mtx_lock);
+		    iop->bytes += w_ptr->len;
+		    iop->io_cnt++;
+		    w_ptr = w_ptr->next;
+		    continue;
+		} else {
+		    if (do_rderr(iop, w_ptr->len) >= 0) {
+			continue;
+		    } else {
+			MTX_UNLOCK(&w_ptr->mtx_lock);
+			tls_close(sop->tls_ctx);
+			tls_free(sop->tls_ctx);
+			return -1;
+		    }
+		}
+	    }
+	} else {
+	    for (;;) {
+		if ((w_ptr->len = tls_read(sop->tls_ctx, w_ptr->line, iop->buf_sz)) > 0) {
+		    WR_LOCK(&w_ptr->next->rw_lock);
+		    RW_UNLOCK(&w_ptr->rw_lock);
+		    iop->bytes += w_ptr->len;
+		    iop->io_cnt++;
+		    w_ptr = w_ptr->next;
+		    continue;
+		} else {
+		    if (do_rderr(iop, w_ptr->len) >= 0) {
+			continue;
+		    } else {
+			RW_UNLOCK(&w_ptr->rw_lock);
+			tls_close(sop->tls_ctx);
+			tls_free(sop->tls_ctx);
+			return -1;
+		    }
+		}
+	    }
+	}
+}
+
+int rbuf_tls_readfrom(struct io_params *iop)
+{
+        struct rbuf_entry	*r_ptr;
+	struct sock_param	*sop;
+	int 			nleft, nw, r;
+	char			*lptr;
+
+	r_ptr = iop->rbuf_p;
+	sop = iop->sock_data;
+
+	rbuf_locksync(iop);
+
+	if (*iop->type_p != TYPE_2) {
+	    MTX_LOCK(&r_ptr->mtx_lock);
+	} else {
+	    RD_LOCK(&r_ptr->rw_lock);
+	}
+
+	if (*iop->type_p != TYPE_2) {
+	    for (;;) {
+		lptr = r_ptr->line;
+		nleft = r_ptr->len;
+		while (nleft > 0) {
+		    nw = tls_write(sop->tls_ctx, lptr, r_ptr->len);
+		    if (nw == r_ptr->len) {
+			nleft -= nw;
+			iop->bytes += nw;
+			iop->io_cnt++;
+			MTX_LOCK(&r_ptr->next->mtx_lock);
+			MTX_UNLOCK(&r_ptr->mtx_lock);
+			r_ptr = r_ptr->next;
+			continue;
+		    } else if (nw < r_ptr->len && nw > 0) {
+			nleft -= nw;
+			lptr += nw;
+			iop->bytes += nw;
+			continue;
+		    } else if (nw <= 0) {
+			if (do_wrerr(iop, nw, (void *)&r_ptr->mtx_lock) >= 0) {
+			    continue;
+			} else {
+			    MTX_UNLOCK(&r_ptr->mtx_lock);
+			    tls_close(sop->tls_ctx);
+			    tls_free(sop->tls_ctx);
+			    return -1;
+			}
+		    }
+		}
+	    }
+	} else {
+	    for (;;) {
+		lptr = r_ptr->line;
+		nleft = r_ptr->len;
+		while (nleft > 0) {
+		    nw = tls_write(sop->tls_ctx, lptr, r_ptr->len);
+		    if (nw == r_ptr->len) {
+			nleft -= nw;
+			iop->bytes += nw;
+			iop->io_cnt++;
+			RD_LOCK(&r_ptr->next->rw_lock);
+			RW_UNLOCK(&r_ptr->rw_lock);
+			r_ptr = r_ptr->next;
+			continue;
+		    } else if (nw < r_ptr->len && nw > 0) {
+			nleft -= nw;
+			lptr += nw;
+			iop->bytes += nw;
+			continue;
+		    } else if (nw <= 0) {
+			if (do_wrerr(iop, nw, (void *)&r_ptr->rw_lock) >= 0) {
+			    continue;
+			} else {
+			    RW_UNLOCK(&r_ptr->rw_lock);
+			    tls_close(sop->tls_ctx);
+			    tls_free(sop->tls_ctx);
+			    return -1;
+			}
+		    }
+		}
+	    }
+	}
+}
+
 int rbuf_writeto(struct io_params *iop)
 {
 	struct rbuf_entry	*w_ptr;
@@ -66,7 +210,7 @@ int rbuf_writeto(struct io_params *iop)
 		    w_ptr = w_ptr->next;
 		    continue;
 		} else {
-		    if (do_rderr(iop, w_ptr->len, (void *)&w_ptr->mtx_lock) >= 0) {
+		    if (do_rderr(iop, w_ptr->len) >= 0) {
 			continue;
 		    } else {
 			MTX_UNLOCK(&w_ptr->mtx_lock);
@@ -84,7 +228,7 @@ int rbuf_writeto(struct io_params *iop)
 		    w_ptr = w_ptr->next;
 		    continue;
 		} else {
-		    if (do_rderr(iop, w_ptr->len, (void *)&w_ptr->rw_lock) >= 0) {
+		    if (do_rderr(iop, w_ptr->len) >= 0) {
 			continue;
 		    } else {
 			RW_UNLOCK(&w_ptr->rw_lock);
@@ -110,7 +254,7 @@ int rbuf_readfrom(struct io_params *iop)
 	} else {
 	    RD_LOCK(&r_ptr->rw_lock);
 	}
-	printf("WRITING TO DESC %d\n", iop->io_fd);
+
 	if (*iop->type_p != TYPE_2) {
 	    for (;;) {
 		lptr = r_ptr->line;
@@ -269,9 +413,18 @@ void free_rbuf(struct rbuf_entry *rbuf)
 	}
 }
 
-int io_error(struct io_params *iop, int e)
+int io_error(struct io_params *iop, int e, int n)
 {
-	if (e == EPIPE 		|| \
+	struct sock_param	*sop;
+
+	sop = iop->sock_data;
+
+	if (sop->tls == TRUE) {
+	    if (n == TLS_WANT_POLLIN || \
+		n == TLS_WANT_POLLOUT) {
+		    return 1;
+	    }
+	} else if (e == EPIPE	|| \
 	    e == ENETDOWN 	|| \
 	    e == EDESTADDRREQ 	|| \
 	    e == ENOTCONN) {
@@ -308,26 +461,42 @@ void rbuf_locksync(struct io_params *iop)
         MTX_UNLOCK(&iop->listlock);
 }
 
-int do_wrerr(struct io_params *iop, int n, void *lock)
+int do_rderr(struct io_params *iop, int n)
+{
+	int	r;
+
+	if (n == 0) {
+	    sleep(3);
+	    return 0;
+	}
+
+	if ((r = io_error(iop, errno, n)) == 0) {
+	    sleep(3); /* XXX BETTER TO CALL select() HERE? */
+	    return 0;
+	} else if (r == 1)
+	    return 0;
+	else
+	    return -1;
+}
+
+int do_wrerr(struct io_params *iop, int n, void *l)
 {
 	int r;
 
 	if (n == 0) {
-	    sleep_unlocked(iop, 3, lock);
+	    sleep_unlocked(iop, 3, l);
 	    return 0;
 	}
 
-	r = io_error(iop, errno);
+	r = io_error(iop, errno, n);
 	if (r == 1) /* recv'd EAGAIN or EINTR */
 	   return 0;
 	else if (r == 0) {
-	    sleep_unlocked(iop, 3, lock);
+	    sleep_unlocked(iop, 3, l);
 	    return 0;
-	} else {
+	} else
 	    /* LOG SOMETHING? */
-	    unlock(iop, lock);
 	    return -1;
-	}
 }
 
 void sleep_unlocked(struct io_params *iop, int n, void *lck)
@@ -360,34 +529,13 @@ void thrdfatal_err(struct io_params *iop, void *l)
 	unlock(iop, l);
 }
 
-int do_rderr(struct io_params *iop, int n, void *l)
-{
-	int	r;
-
-	if (n == 0) {
-	    sleep(3);
-	    return 0;
-	}
-
-	if ((r = io_error(iop, errno)) == 0) {
-	    sleep(3); /* XXX BETTER TO CALL select() HERE? */
-	    return 0;
-	} else if (r == 1) {
-	    return 0;
-	} else {
-	    unlock(iop, l);
-	    return -1;
-	}
-}
-
 void unlock(struct io_params *iop, void *l)
 {	
 	int r;
 
-	if (*iop->type_p == TYPE_1 || *iop->type_p == TYPE_3) {
-	    MTX_UNLOCK( (pthread_mutex_t *)l );
-	} else if (*iop->type_p == TYPE_2) {
-	    RW_UNLOCK( (pthread_rwlock_t *)l );
+	if (*iop->type_p != TYPE_2) {
+	    MTX_UNLOCK((pthread_mutex_t *)l);
+	} else {
+	    RW_UNLOCK((pthread_rwlock_t *)l);
 	}
-}	    
-
+}

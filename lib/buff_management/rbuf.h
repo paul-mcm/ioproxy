@@ -32,6 +32,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
+#include <tls.h>
 #include <unistd.h>
 
 #include "../configuration/config.h"
@@ -43,7 +44,7 @@ struct rbuf_entry *new_rbuf();
 struct rbuf_entry { 
 	int			id;
         char			*line;
-	int			len;
+	ssize_t			len;
         pthread_mutex_t		mtx_lock;
         pthread_rwlock_t	rw_lock;
 	struct	rbuf_entry	*next;
@@ -51,6 +52,8 @@ struct rbuf_entry {
 
 int rbuf_readfrom(struct io_params *);
 int rbuf_writeto(struct io_params *);
+int rbuf_tls_writeto(struct io_params *);
+int rbuf_tls_readfrom(struct io_params *);
 
 int rbuf_t3_readfrom(struct io_params *);
 
@@ -61,9 +64,9 @@ struct rbuf_entry *new_rbuf(int, int);
 void free_rbuf(struct rbuf_entry *);
 void sleep_unlocked(struct io_params *, int, void *);
 
-int io_error(struct io_params *, int);
+int io_error(struct io_params *, int, int);
 int do_wrerr(struct io_params *, int n, void *);
-int do_rderr(struct io_params *, int n, void *);
+int do_rderr(struct io_params *, int n);
 
 void rbuf_locksync0(struct io_params *);
 void rbuf_locksync(struct io_params *);

@@ -300,10 +300,19 @@ void *io_thread(void *arg)
 		}
 
 		/* BLOCK */
-		if (is_src(iop))
-		    r = rbuf_writeto(iop);
-		else
-		    r = rbuf_readfrom(iop);
+		if (is_src(iop)) {
+		    if (use_tls(iop)) {
+			r = rbuf_tls_writeto(iop);
+		    } else {
+			r = rbuf_writeto(iop);
+		    }
+		} else {
+		    if (use_tls(iop)) {
+			r = rbuf_tls_readfrom(iop);
+		    } else {
+			r = rbuf_readfrom(iop);
+		    }
+		}
 
 		/* ONLY HERE IF DESCRIPTOR CLOSED */
 	 	if (is_netsock(iop) && sop->conn_type == LISTEN) {
