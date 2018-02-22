@@ -47,16 +47,17 @@ int rbuf_tls_writeto(struct io_params *iop)
 	int 			i, r;
 
 	sop = iop->sock_data;
-	w_ptr = iop->rbuf_p;
+	w_ptr = iop->w_ptr;
 
-	/* THIS THREAD MUST GET THE LOCK FIRST */
-	if (*iop->type_p != TYPE_2) {
-	    MTX_LOCK(&w_ptr->mtx_lock);
-	} else {
-	    WR_LOCK(&w_ptr->rw_lock);
+	if (*iop->listready == 0) {
+	    /* THIS THREAD MUST GET THE LOCK FIRST */
+	    if (*iop->type_p != TYPE_2) {
+		MTX_LOCK(&w_ptr->mtx_lock);
+	    } else {
+		WR_LOCK(&w_ptr->rw_lock);
+	    }
+	    rbuf_locksync0(iop);
 	}
-
-	rbuf_locksync0(iop);
 
 	if (*iop->type_p != TYPE_2) {
 	    for (;;) {
@@ -71,9 +72,9 @@ int rbuf_tls_writeto(struct io_params *iop)
 		    if (do_rderr(iop, w_ptr->len) >= 0) {
 			continue;
 		    } else {
-			MTX_UNLOCK(&w_ptr->mtx_lock);
 			tls_close(sop->tls_ctx);
 			tls_free(sop->tls_ctx);
+			iop->w_ptr = w_ptr;
 			return -1;
 		    }
 		}
@@ -91,9 +92,9 @@ int rbuf_tls_writeto(struct io_params *iop)
 		    if (do_rderr(iop, w_ptr->len) >= 0) {
 			continue;
 		    } else {
-			RW_UNLOCK(&w_ptr->rw_lock);
 			tls_close(sop->tls_ctx);
 			tls_free(sop->tls_ctx);
+			iop->w_ptr = w_ptr;
 			return -1;
 		    }
 		}
@@ -108,16 +109,8 @@ int rbuf_tls_readfrom(struct io_params *iop)
 	int 			nleft, nw, r;
 	char			*lptr;
 
-	r_ptr = iop->rbuf_p;
 	sop = iop->sock_data;
-
-	rbuf_locksync(iop);
-
-	if (*iop->type_p != TYPE_2) {
-	    MTX_LOCK(&r_ptr->mtx_lock);
-	} else {
-	    RD_LOCK(&r_ptr->rw_lock);
-	}
+	r_ptr = set_rbuf_lock(iop);
 
 	if (*iop->type_p != TYPE_2) {
 	    for (;;) {
@@ -143,6 +136,7 @@ int rbuf_tls_readfrom(struct io_params *iop)
 			    continue;
 			} else {
 			    MTX_UNLOCK(&r_ptr->mtx_lock);
+			    iop->r_ptr = r_ptr;
 			    tls_close(sop->tls_ctx);
 			    tls_free(sop->tls_ctx);
 			    return -1;
@@ -174,6 +168,7 @@ int rbuf_tls_readfrom(struct io_params *iop)
 			    continue;
 			} else {
 			    RW_UNLOCK(&r_ptr->rw_lock);
+			    iop->r_ptr = r_ptr;
 			    tls_close(sop->tls_ctx);
 			    tls_free(sop->tls_ctx);
 			    return -1;
@@ -189,16 +184,17 @@ int rbuf_writeto(struct io_params *iop)
 	struct rbuf_entry	*w_ptr;
 	int 			i, r;
 
-	w_ptr = iop->rbuf_p;
+	w_ptr = iop->w_ptr;
 
-	/* THIS THREAD MUST GET THE LOCK FIRST */
-	if (*iop->type_p != TYPE_2) {
-	    MTX_LOCK(&w_ptr->mtx_lock);
-	} else {
-	    WR_LOCK(&w_ptr->rw_lock);
+	if (*iop->listready == 0) {
+	    /* THIS THREAD MUST GET THE LOCK FIRST */
+	    if (*iop->type_p != TYPE_2) {
+		MTX_LOCK(&w_ptr->mtx_lock);
+	    } else {
+		WR_LOCK(&w_ptr->rw_lock);
+	    }
+	    rbuf_locksync0(iop);
 	}
-
-	rbuf_locksync0(iop);
 
 	if (*iop->type_p != TYPE_2) {
 	    for (;;) {
@@ -213,7 +209,7 @@ int rbuf_writeto(struct io_params *iop)
 		    if (do_rderr(iop, w_ptr->len) >= 0) {
 			continue;
 		    } else {
-			MTX_UNLOCK(&w_ptr->mtx_lock);
+			iop->w_ptr = w_ptr;
 			return -1;
 		    }
 		}
@@ -231,7 +227,7 @@ int rbuf_writeto(struct io_params *iop)
 		    if (do_rderr(iop, w_ptr->len) >= 0) {
 			continue;
 		    } else {
-			RW_UNLOCK(&w_ptr->rw_lock);
+			iop->w_ptr = w_ptr;
 			return -1;
 		    }
 		}
@@ -246,14 +242,7 @@ int rbuf_readfrom(struct io_params *iop)
         int r, nw;
 	char *lptr;
 
-	r_ptr = iop->rbuf_p;
-	rbuf_locksync(iop);
-
-	if (*iop->type_p != TYPE_2) {
-	    MTX_LOCK(&r_ptr->mtx_lock);
-	} else {
-	    RD_LOCK(&r_ptr->rw_lock);
-	}
+	r_ptr = set_rbuf_lock(iop);
 
 	if (*iop->type_p != TYPE_2) {
 	    for (;;) {
@@ -277,8 +266,11 @@ int rbuf_readfrom(struct io_params *iop)
 		    } else if (nw <= 0) {
 			if (do_wrerr(iop, nw, (void *)&r_ptr->mtx_lock) >= 0)
 			    continue;
-			else
+			else {
+			    MTX_UNLOCK(&r_ptr->mtx_lock);
+			    iop->r_ptr = r_ptr;
 			    return -1;
+			}
 		    }
 		}
 	    }
@@ -304,8 +296,11 @@ int rbuf_readfrom(struct io_params *iop)
 		    } else if (nw <= 0) {
 			if (do_wrerr(iop, nw, (void *)&r_ptr->rw_lock) >= 0)
 			    continue;
-			else
+			else {
+			    RW_UNLOCK(&r_ptr->rw_lock);
+			    iop->r_ptr = r_ptr;
 			    return -1;
+			}
 		    }
 		}
 	    }
@@ -319,11 +314,9 @@ int rbuf_t3_tlsreadfrom(struct io_params *iop)
 	char			*lptr;
         int 			r, nw, nleft;
 
-	r_ptr = iop->rbuf_p;
 	sop = iop->sock_data;
+	r_ptr = set_rbuf_lock(iop);
 
-	rbuf_locksync(iop);
-	MTX_LOCK(&r_ptr->mtx_lock);
 	MTX_LOCK(&iop->fd_lock);
 	
         for (;;) {
@@ -352,6 +345,8 @@ int rbuf_t3_tlsreadfrom(struct io_params *iop)
 			MTX_LOCK(&iop->fd_lock);
 			continue;
 		    } else {
+			MTX_UNLOCK(&r_ptr->mtx_lock);
+			iop->r_ptr = r_ptr;
 			return -1;
 		    }
 		}
@@ -365,10 +360,7 @@ int rbuf_t3_readfrom(struct io_params *iop)
         int r, nw, nleft;
 	char *lptr;
 
-	r_ptr = iop->rbuf_p;
-
-	rbuf_locksync(iop);
-	MTX_LOCK(&r_ptr->mtx_lock);
+	r_ptr = set_rbuf_lock(iop);
 	MTX_LOCK(&iop->fd_lock);
 	
         for (;;) {
@@ -398,6 +390,8 @@ int rbuf_t3_readfrom(struct io_params *iop)
 			MTX_LOCK(&iop->fd_lock);
 			continue;
 		    } else {
+			MTX_UNLOCK(&r_ptr->mtx_lock);
+			iop->r_ptr = r_ptr;
 			return -1;
 		    }
 		}
@@ -471,12 +465,14 @@ int io_error(struct io_params *iop, int e, int n)
 		n == TLS_WANT_POLLOUT) {
 		    return 1;
 	    }
+	} else if (is_netsock(iop) && e == EPIPE) {
+	    return -1;
 	} else if (e == EPIPE	|| \
 	    e == ENETDOWN 	|| \
 	    e == EDESTADDRREQ 	|| \
 	    e == ENOTCONN) {
-		log_ret("io error - remote end closed for %d: %s", \
-		    iop->io_fd, iop->path);
+		log_ret("io error - remote end closed for %d: %d: %s", \
+		    iop->io_fd, e, iop->path);
 		return 0;
 	} else if (errno == EAGAIN || errno == EINTR) {
 	    return 1;
@@ -512,7 +508,9 @@ int do_rderr(struct io_params *iop, int n)
 {
 	int	r;
 
-	if (n == 0) {
+	if (n == 0 && use_tls(iop)) {
+	    return -1;
+	} else if (n == 0) {
 	    sleep(3);
 	    return 0;
 	}
@@ -585,4 +583,19 @@ void unlock(struct io_params *iop, void *l)
 	} else {
 	    RW_UNLOCK((pthread_rwlock_t *)l);
 	}
+}
+
+struct rbuf_entry *set_rbuf_lock(struct io_params *iop)
+{
+	int	r;
+
+	if (*iop->listready == 0)
+	    rbuf_locksync(iop);
+
+	if (*iop->type_p != TYPE_2) {
+	    MTX_LOCK(&iop->r_ptr->mtx_lock);
+	} else {
+	    RD_LOCK(&iop->r_ptr->rw_lock);
+	}
+	return iop->r_ptr;;
 }

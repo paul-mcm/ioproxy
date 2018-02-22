@@ -100,6 +100,8 @@ struct io_params {
 	struct iop0_params	*iop0;		/* TYPE 3 ONLY; ELSE NULL */
 
 	struct rbuf_entry	*rbuf_p;
+	struct rbuf_entry	*w_ptr;
+	struct rbuf_entry	*r_ptr;
 	void *(*io_thread)(void *);
 
 	pthread_t		tid;
@@ -176,6 +178,7 @@ struct iop0_params	*iop0_alloc(void);
 struct iop1_params	*iop1_alloc(void);
 struct io_params	*iop_alloc(void);
 struct sock_param	*sock_param_alloc(void);
+struct rbuf_entry 	*set_rbuf_lock(struct io_params *);
 
 void free_iop0(struct iop0_params *);
 void free_iop1(struct iop1_params *);

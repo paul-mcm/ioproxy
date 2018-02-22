@@ -96,11 +96,15 @@ void iop_setup(struct io_cfg *iocfg)
 	    iop0->iop->listlock = PTHREAD_MUTEX_INITIALIZER;
 
 	    iop0->iop->rbuf_p = new_rbuf(iocfg->io_type, iop->buf_sz);
+	    iop0->iop->w_ptr = iop0->iop->rbuf_p;
+	    iop0->iop->r_ptr = iop0->iop->rbuf_p;
 	    iop0->iop->listready = malloc(sizeof(int));
 	    *iop0->iop->listready = 0;
 
 	    LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
 		iop1->iop->rbuf_p	= iop0->iop->rbuf_p;
+		iop1->iop->r_ptr	= iop0->iop->rbuf_p;
+		iop1->iop->w_ptr	= iop0->iop->rbuf_p;
 		iop1->iop->buf_sz	= iop0->iop->buf_sz;
 		iop1->iop->listready	= iop0->iop->listready;
 		iop1->iop->listlock	= iop0->iop->listlock;
@@ -136,10 +140,16 @@ void iop_setup(struct io_cfg *iocfg)
 		*newiop0->iop->listready = 0;
 
 		newiop0->iop->rbuf_p = new_rbuf(iocfg->io_type, newiop0->iop->buf_sz);
+		newiop0->iop->w_ptr = newiop0->iop->rbuf_p;
+		newiop0->iop->r_ptr = newiop0->iop->rbuf_p;
+
 		newiop1->iop->io_thread = io_t3_thread;
 
 		newiop0->iop->io_drn	= SRC;
 		newiop1->iop->rbuf_p 	= newiop0->iop->rbuf_p;
+		newiop1->iop->w_ptr	= newiop0->iop->rbuf_p;
+		newiop1->iop->r_ptr	= newiop0->iop->rbuf_p;
+
 		newiop1->iop->buf_sz	= newiop0->iop->buf_sz;
 
 		newiop1->iop->listready	= newiop0->iop->listready;
@@ -296,13 +306,17 @@ void *io_thread(void *arg)
 
 	for (;;) {
 	    if (iop->io_fd < 0) {
-		log_msg("opening fd for %s\n", iop->path);
+		if (is_netsock(iop)) {
+		    log_msg("creating socket for %s\n", sop->ip);
+		} else {
+		    log_msg("opening dscrptr for %s\n", iop->path);
+		}
+
 		if ((iop->io_fd = open_desc(iop)) < 0) {
 		    log_msg("open error. Sleeping...\n");
 		    sleep(10);
 		    continue;
 		}
-
 		/* BLOCK */
 		if (is_src(iop)) {
 		    if (use_tls(iop)) {
@@ -328,12 +342,10 @@ void *io_thread(void *arg)
 		}
 
 		if (SIGTERM_STAT == TRUE) {
-			log_msg("SIGTERM_STAT is TRUE\n");
-			if (iop->desc_type == UNIX_SOCK)
-			    if (unlink(iop->path) != 0)
-				log_ret("unlinkk error: %s %s\n", iop->path, errno);
-
-			break;
+		    log_msg("SIGTERM_STAT is TRUE\n");
+		    if (iop->desc_type == UNIX_SOCK && unlink(iop->path) != 0)
+			log_ret("unlinkk error: %s %s\n", iop->path, errno);
+		    break;
 		}
 	    }
 	}

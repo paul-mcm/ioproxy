@@ -437,12 +437,12 @@ int do_netconnect(struct io_params *iop)
 	    servaddr.sin_port = htons(sop->port);
 	    inet_pton(AF_INET, sop->ip, &servaddr.sin_addr);
 
-	    if ((fd = socket(AF_INET, s_type, 0)) < 0) {
-		log_ret("socket() error");
-		return -1;
-	    }
-
 	    for (;;) {
+		if ((fd = socket(AF_INET, s_type, 0)) < 0) {
+		    log_ret("socket() error");
+		    return -1;
+		}
+
 		if (connect(fd, (SA *)&servaddr, sizeof(servaddr)) != 0) {
 		    log_ret("connect() error");
 		    sleep(3);
