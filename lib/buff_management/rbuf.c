@@ -75,6 +75,7 @@ int rbuf_tls_writeto(struct io_params *iop)
 			tls_close(sop->tls_ctx);
 			tls_free(sop->tls_ctx);
 			iop->w_ptr = w_ptr;
+			report_close_error(iop);
 			return -1;
 		    }
 		}
@@ -95,6 +96,7 @@ int rbuf_tls_writeto(struct io_params *iop)
 			tls_close(sop->tls_ctx);
 			tls_free(sop->tls_ctx);
 			iop->w_ptr = w_ptr;
+			report_close_error(iop);
 			return -1;
 		    }
 		}
@@ -139,6 +141,7 @@ int rbuf_tls_readfrom(struct io_params *iop)
 			    iop->r_ptr = r_ptr;
 			    tls_close(sop->tls_ctx);
 			    tls_free(sop->tls_ctx);
+			    report_close_error(iop);
 			    return -1;
 			}
 		    }
@@ -171,6 +174,7 @@ int rbuf_tls_readfrom(struct io_params *iop)
 			    iop->r_ptr = r_ptr;
 			    tls_close(sop->tls_ctx);
 			    tls_free(sop->tls_ctx);
+			    report_close_error(iop);
 			    return -1;
 			}
 		    }
@@ -210,6 +214,7 @@ int rbuf_writeto(struct io_params *iop)
 			continue;
 		    } else {
 			iop->w_ptr = w_ptr;
+			report_close_error(iop);
 			return -1;
 		    }
 		}
@@ -228,6 +233,7 @@ int rbuf_writeto(struct io_params *iop)
 			continue;
 		    } else {
 			iop->w_ptr = w_ptr;
+			report_close_error(iop);
 			return -1;
 		    }
 		}
@@ -269,6 +275,7 @@ int rbuf_readfrom(struct io_params *iop)
 			else {
 			    MTX_UNLOCK(&r_ptr->mtx_lock);
 			    iop->r_ptr = r_ptr;
+			    report_close_error(iop);
 			    return -1;
 			}
 		    }
@@ -299,6 +306,7 @@ int rbuf_readfrom(struct io_params *iop)
 			else {
 			    RW_UNLOCK(&r_ptr->rw_lock);
 			    iop->r_ptr = r_ptr;
+			    report_close_error(iop);
 			    return -1;
 			}
 		    }
@@ -347,6 +355,7 @@ int rbuf_t3_tlsreadfrom(struct io_params *iop)
 		    } else {
 			MTX_UNLOCK(&r_ptr->mtx_lock);
 			iop->r_ptr = r_ptr;
+			report_close_error(iop);
 			return -1;
 		    }
 		}
@@ -392,6 +401,7 @@ int rbuf_t3_readfrom(struct io_params *iop)
 		    } else {
 			MTX_UNLOCK(&r_ptr->mtx_lock);
 			iop->r_ptr = r_ptr;
+			report_close_error(iop);
 			return -1;
 		    }
 		}
@@ -599,3 +609,27 @@ struct rbuf_entry *set_rbuf_lock(struct io_params *iop)
 	}
 	return iop->r_ptr;;
 }
+
+void report_close_error(struct io_params *iop)
+{
+	char	*h;
+
+	if (is_netsock(iop)) {
+	    if (iop->sock_data->ip != NULL)
+		h = iop->sock_data->ip
+	    else
+		h = iop->sock_data->hostname;
+
+	    if (use_tls(iop))
+		log_msg("Lost TLS connection to %s\n", h);
+	    else
+		log_msg("Lost connection to %s\n", h);
+
+	} else if (iop->desc_type == UNIX_SOCK) {
+	    log_msg("Lost connection to unix sock %s\n", iop->path);
+	} else {
+	    log_msg("Descriptor closed for %s\n", iop->path);
+	}
+}
+
+

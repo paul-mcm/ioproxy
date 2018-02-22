@@ -162,6 +162,7 @@ int is_netsock(struct io_params *);
 int is_src(struct io_params *);
 int is_dst(struct io_params *);
 int use_tls(struct io_params *);
+void report_close_error(struct io_params *);
 
 int valid_path(char *, struct stat *);  /* VALIDATE PATH */
 int valid_ftype(int, struct stat *); /* VALIDATE FILE TYPE */
