@@ -616,7 +616,7 @@ void report_close_error(struct io_params *iop)
 
 	if (is_netsock(iop)) {
 	    if (iop->sock_data->ip != NULL)
-		h = iop->sock_data->ip
+		h = iop->sock_data->ip;
 	    else
 		h = iop->sock_data->hostname;
 
