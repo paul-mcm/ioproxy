@@ -140,14 +140,14 @@ int open_sock(struct io_params *iop)
 	sop = iop->sock_data;
 
 	if (sop->conn_type == CLIENT) {
-	    return call_connect(iop);
+	    return do_connect(iop);
 	} else {
 	    if (sop->listenfd < 0) {
-		if ((sop->listenfd = call_bind(iop)) < 0)
+		if ((sop->listenfd = do_bind(iop)) < 0)
 		    log_msg("error binding socket");
 	    }
 
-	    if ((r = call_accept(iop)) < 0)
+	    if ((r = do_accept(iop)) < 0)
 		return r;
 	    else
 		iop->io_fd = r;
@@ -163,7 +163,7 @@ int open_sock(struct io_params *iop)
 	}
 }	
 
-int call_bind(struct io_params *iop)
+int do_bind(struct io_params *iop)
 {
 	int			lfd, r, sopt;
 	struct sockaddr_un      u_saddr;
@@ -265,7 +265,7 @@ int do_tlsaccept(struct io_params *iop)
 	}
 }
 
-int call_accept(struct io_params *iop)
+int do_accept(struct io_params *iop)
 {
 	int			sd;
 	struct sockaddr_un 	cliaddr;
@@ -287,7 +287,7 @@ int call_accept(struct io_params *iop)
 	return sd;
 }
 
-int call_connect(struct io_params *iop)
+int do_connect(struct io_params *iop)
 {
 
 	if (iop->desc_type == UNIX_SOCK)

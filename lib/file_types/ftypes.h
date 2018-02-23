@@ -47,10 +47,10 @@ int open_sock(struct io_params *);
 
 int set_flags(struct io_params *);
 
-int call_bind(struct io_params *);
-int call_accept(struct io_params *);
+int do_bind(struct io_params *);
+int do_accept(struct io_params *);
 
-int call_connect(struct io_params *);
+int do_connect(struct io_params *);
 int do_localconnect(struct io_params *);
 int do_netconnect(struct io_params *);
 
