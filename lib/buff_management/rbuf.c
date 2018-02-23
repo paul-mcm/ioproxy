@@ -178,9 +178,7 @@ int rbuf_writeto(struct io_params *iop)
 
 	if (*iop->type_p != TYPE_2) {
 	    for (;;) {
-		printf("CALLING READ\n");
 		if ((w_ptr->len = read(iop->io_fd, w_ptr->line, iop->buf_sz)) > 0) {
-		    printf("POST CALLING READ\n");
 		    MTX_LOCK(&w_ptr->next->mtx_lock);
 		    MTX_UNLOCK(&w_ptr->mtx_lock);
 		    iop->bytes += w_ptr->len;
@@ -188,9 +186,7 @@ int rbuf_writeto(struct io_params *iop)
 		    w_ptr = w_ptr->next;
 		    continue;
 		} else {
-		    printf("CALLING READ ERROR: %d\n", w_ptr->len);
 		    if (do_rderr(iop, w_ptr) < 0) {
-			printf("READ ERROR RETURNED BADLY\n");
 			return -1;
 		    }
 		}
@@ -516,10 +512,7 @@ void sleep_unlocked(struct io_params *iop, int n, struct rbuf_entry *rb)
 	pthread_mutex_t		*mtx;
 	pthread_rwlock_t	*rwlk;
 
-	printf("sleep_unlocked() called\n");
-
 	UNLOCK(iop, rb);
-	printf("sleeping\n");
 	sleep(n);
 	LOCK(iop, rb);
 }

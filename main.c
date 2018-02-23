@@ -333,10 +333,7 @@ void *io_thread(void *arg)
 		}
 
 		/* ONLY HERE IF DESCRIPTOR CLOSED */
-	 	if (is_netsock(iop) && sop->conn_type == SRVR) {
-		    close(sop->listenfd);
-		    sop->listenfd = -1;
-		} else {
+	 	if (is_netsock(iop)) {
 		    close(iop->io_fd);
 		    iop->io_fd = -1;
 		}
