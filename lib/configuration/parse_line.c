@@ -171,10 +171,10 @@ int set_conn(char *t, struct io_params *iop)
 {	
 	int err = 0;
 
-        if (strcasecmp(t, "CONNECT") == 0)
-		iop->sock_data->conn_type = CONNECT;
-        else if (strcasecmp(t, "LISTEN") == 0)
-		iop->sock_data->conn_type = LISTEN;
+        if (strcasecmp(t, "CLIENT") == 0)
+		iop->sock_data->conn_type = CLIENT;
+        else if (strcasecmp(t, "SERVER") == 0)
+		iop->sock_data->conn_type = SRVR;
         else {
                 log_msg("unknown connection type: %s\n", t);
                 err = -1;

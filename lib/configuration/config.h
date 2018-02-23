@@ -62,8 +62,8 @@ typedef enum {
 } T_FD;
 
 typedef enum {
-	CONNECT,
-	LISTEN,
+	CLIENT,
+	SRVR,
 } T_SOCK;
 
 typedef enum {

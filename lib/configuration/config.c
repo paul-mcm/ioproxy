@@ -20,7 +20,7 @@ const char *tr_fls[] = { "FALSE", "TRUE" };
 const char *desc_types[] = { "REG_FILE", "FIFO", "STDOUT", "STDIN", "UNIX_SOCK", "TCP_SOCK", "UDP_SOCK"};
 const char *io_drn[] = { "SRC", "DST" };
 const char *io_types[] = {"TYPE_1", "TYPE_2", "TYPE_3"};
-const char *conn_type[] = { "CONNECT", "LISTEN" };
+const char *conn_type[] = { "CLIENT", "SRVR" };
 const char *sockio[] = { "DGRAM", "STREAM" };
 
 int read_config(struct all_cfg_list *all)
@@ -566,26 +566,26 @@ void validate_sockparams(struct io_params *iop)
 	else if (iop->desc_type == TCP_SOCK || iop->desc_type == UDP_SOCK || UNIX_SOCK)
 	    sop->sockio == DGRAM;
 
-	if (sop->conn_type == LISTEN) {
+	if (sop->conn_type == SRVR) {
 	    if (iop->desc_type == UDP_SOCK)
 		log_die("Config error: No udp listening sockets");
 	    if (sop->hostname != NULL)
 		log_msg("Config notice: hostnames ignored for server listening sockets\n");
 	}
 
-	if (is_netsock(iop) && sop->conn_type == CONNECT) {
+	if (is_netsock(iop) && sop->conn_type == CLIENT) {
 	    if (sop->hostname == NULL && sop->ip == NULL)
 		log_die("config error: hostname required for tcp sockets\n");
 	}
 
 	if (sop->tls == TRUE) {
-	    if (sop->conn_type == CONNECT && sop->cacert_path == NULL && sop->cacert_dirpath == NULL)
+	    if (sop->conn_type == CLIENT && sop->cacert_path == NULL && sop->cacert_dirpath == NULL)
 		log_die("TLS requires a CA cert path CA cert directory\n");
 
-	    if (sop->conn_type == LISTEN && sop->srvr_cert == NULL)
+	    if (sop->conn_type == SRVR && sop->srvr_cert == NULL)
 		log_die("Server TLS requires filenames for server's certificate\n");
 
-	    if (sop->conn_type == LISTEN && sop->srvr_key == NULL)
+	    if (sop->conn_type == SRVR && sop->srvr_key == NULL)
 		log_die("Server TLS requires filenames for server's private key\n");
 
 	    if (iop->desc_type == UDP_SOCK && sop->tls == TRUE)

@@ -139,7 +139,7 @@ int open_sock(struct io_params *iop)
 
 	sop = iop->sock_data;
 
-	if (sop->conn_type == CONNECT) {
+	if (sop->conn_type == CLIENT) {
 	    return call_connect(iop);
 	} else {
 	    if (sop->listenfd < 0) {
