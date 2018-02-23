@@ -152,8 +152,8 @@ int open_sock(struct io_params *iop)
 	    else
 		iop->io_fd = r;
 
-	    if (use_tls(iop) && call_tls_accept(iop) < 0) {
-		log_msg("call_tls_accept() failed\n");
+	    if (use_tls(iop) && do_tlsaccept(iop) < 0) {
+		log_msg("do_tlsaccept() failed\n");
 		close(r);
 		iop->io_fd = -1;
 		return -1;
@@ -237,7 +237,7 @@ int call_bind(struct io_params *iop)
 	return lfd;
 }
 
-int call_tls_accept(struct io_params *iop)
+int do_tlsaccept(struct io_params *iop)
 {
 	struct tls_config	*tls_cfg;
 	struct tls		*tls;

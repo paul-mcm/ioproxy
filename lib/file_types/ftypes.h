@@ -38,11 +38,9 @@
 
 #include <arpa/inet.h>
 
-
 #include "../configuration/config.h"
 
 int open_desc(struct io_params *);
-
 int open_fifo(struct io_params *);
 int open_file(struct io_params *);
 int open_sock(struct io_params *);
@@ -51,8 +49,10 @@ int set_flags(struct io_params *);
 
 int call_bind(struct io_params *);
 int call_accept(struct io_params *);
-int call_connect(struct io_params *);
 
+int call_connect(struct io_params *);
 int do_localconnect(struct io_params *);
 int do_netconnect(struct io_params *);
+
 int do_tlsconnect(struct io_params *);
+int do_tlsaccept(struct io_params *);
