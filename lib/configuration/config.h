@@ -97,7 +97,6 @@ struct io_params {
         T_DATA			io_drn;
         T_FD			desc_type;
 	T_IO			*type_p;
-	struct iop0_params	*iop0;		/* TYPE 3 ONLY; ELSE NULL */
 
 	struct rbuf_entry	*rbuf_p;
 	struct rbuf_entry	*w_ptr;
