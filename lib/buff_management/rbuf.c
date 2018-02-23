@@ -72,10 +72,7 @@ int rbuf_tls_writeto(struct io_params *iop)
 		    if (do_rderr(iop, w_ptr->len) >= 0) {
 			continue;
 		    } else {
-			tls_close(sop->tls_ctx);
-			tls_free(sop->tls_ctx);
-			iop->w_ptr = w_ptr;
-			report_close_error(iop);
+			do_close(iop, w_ptr);
 			return -1;
 		    }
 		}
@@ -93,10 +90,7 @@ int rbuf_tls_writeto(struct io_params *iop)
 		    if (do_rderr(iop, w_ptr->len) >= 0) {
 			continue;
 		    } else {
-			tls_close(sop->tls_ctx);
-			tls_free(sop->tls_ctx);
-			iop->w_ptr = w_ptr;
-			report_close_error(iop);
+			do_close(iop, w_ptr);
 			return -1;
 		    }
 		}
@@ -137,11 +131,7 @@ int rbuf_tls_readfrom(struct io_params *iop)
 			if (do_wrerr(iop, nw, (void *)&r_ptr->mtx_lock) >= 0) {
 			    continue;
 			} else {
-			    MTX_UNLOCK(&r_ptr->mtx_lock);
-			    iop->r_ptr = r_ptr;
-			    tls_close(sop->tls_ctx);
-			    tls_free(sop->tls_ctx);
-			    report_close_error(iop);
+			    do_close(iop, r_ptr);
 			    return -1;
 			}
 		    }
@@ -170,11 +160,7 @@ int rbuf_tls_readfrom(struct io_params *iop)
 			if (do_wrerr(iop, nw, (void *)&r_ptr->rw_lock) >= 0) {
 			    continue;
 			} else {
-			    RW_UNLOCK(&r_ptr->rw_lock);
-			    iop->r_ptr = r_ptr;
-			    tls_close(sop->tls_ctx);
-			    tls_free(sop->tls_ctx);
-			    report_close_error(iop);
+			    do_close(iop, r_ptr);
 			    return -1;
 			}
 		    }
@@ -213,9 +199,7 @@ int rbuf_writeto(struct io_params *iop)
 		    if (do_rderr(iop, w_ptr->len) >= 0) {
 			continue;
 		    } else {
-			iop->w_ptr = w_ptr;
-			report_close_error(iop);
-			return -1;
+			do_close(iop, w_ptr);
 		    }
 		}
 	    }
@@ -232,8 +216,7 @@ int rbuf_writeto(struct io_params *iop)
 		    if (do_rderr(iop, w_ptr->len) >= 0) {
 			continue;
 		    } else {
-			iop->w_ptr = w_ptr;
-			report_close_error(iop);
+			do_close(iop, w_ptr);
 			return -1;
 		    }
 		}
@@ -273,9 +256,7 @@ int rbuf_readfrom(struct io_params *iop)
 			if (do_wrerr(iop, nw, (void *)&r_ptr->mtx_lock) >= 0)
 			    continue;
 			else {
-			    MTX_UNLOCK(&r_ptr->mtx_lock);
-			    iop->r_ptr = r_ptr;
-			    report_close_error(iop);
+			    do_close(iop, r_ptr);
 			    return -1;
 			}
 		    }
@@ -304,9 +285,7 @@ int rbuf_readfrom(struct io_params *iop)
 			if (do_wrerr(iop, nw, (void *)&r_ptr->rw_lock) >= 0)
 			    continue;
 			else {
-			    RW_UNLOCK(&r_ptr->rw_lock);
-			    iop->r_ptr = r_ptr;
-			    report_close_error(iop);
+			    do_close(iop, r_ptr);
 			    return -1;
 			}
 		    }
@@ -353,9 +332,7 @@ int rbuf_t3_tlsreadfrom(struct io_params *iop)
 			MTX_LOCK(&iop->fd_lock);
 			continue;
 		    } else {
-			MTX_UNLOCK(&r_ptr->mtx_lock);
-			iop->r_ptr = r_ptr;
-			report_close_error(iop);
+			do_close(iop, r_ptr);
 			return -1;
 		    }
 		}
@@ -399,9 +376,7 @@ int rbuf_t3_readfrom(struct io_params *iop)
 			MTX_LOCK(&iop->fd_lock);
 			continue;
 		    } else {
-			MTX_UNLOCK(&r_ptr->mtx_lock);
-			iop->r_ptr = r_ptr;
-			report_close_error(iop);
+			do_close(iop, r_ptr);
 			return -1;
 		    }
 		}
@@ -610,6 +585,33 @@ struct rbuf_entry *set_rbuf_lock(struct io_params *iop)
 	return iop->r_ptr;;
 }
 
+void do_close(struct io_params *iop, struct rbuf_entry *rb)
+{
+	struct sock_param	*sop;
+	int			r;
+
+	if (is_sock(iop))
+	    sop = iop->sock_data;
+
+	if (use_tls(iop)) {
+	    tls_close(sop->tls_ctx);
+	    tls_free(sop->tls_ctx);
+	}
+
+	if (is_src(iop))
+	    iop->w_ptr = rb;
+	else
+	    iop->r_ptr = rb;
+
+	if (iop->desc_type != TYPE_2 && is_dst(iop)) {
+	    MTX_UNLOCK((pthread_mutex_t *)&rb->mtx_lock);
+	} else if (iop->desc_type == TYPE_2 && is_dst(iop)) {
+	    RW_UNLOCK((pthread_rwlock_t *)&rb->rw_lock);
+	}
+
+	report_close_error(iop);
+}
+
 void report_close_error(struct io_params *iop)
 {
 	char	*h;
@@ -631,5 +633,3 @@ void report_close_error(struct io_params *iop)
 	    log_msg("Descriptor closed for %s\n", iop->path);
 	}
 }
-
-

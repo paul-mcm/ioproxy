@@ -72,4 +72,6 @@ int do_rderr(struct io_params *, int n);
 void rbuf_locksync0(struct io_params *);
 void rbuf_locksync(struct io_params *);
 
+void do_close(struct io_params *, struct rbuf_entry *);
+
 #endif
