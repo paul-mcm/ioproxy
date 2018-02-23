@@ -43,15 +43,12 @@ struct io_cfg * parse_config(FILE *);
 int init_cfg(struct io_cfg *);
 
 int parse_line(char *, struct io_params *q);
-
-void set_derived_params(struct io_params *);
 int fill(char *, char *, struct io_params *);
 
 int set_conn(char *, struct io_params *);
 int set_sockio(char *, struct io_params *);
 int set_desc_t(char *, struct io_params *);
 int set_nonblock(char *, struct io_params *iop);
-int parse_tuple(char *, char *);
 
 char * rm_space(char *);
 char * clean_line(char *);

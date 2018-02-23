@@ -146,16 +146,7 @@ int show_all_configs(struct all_cfg_list *);
 
 struct io_params * parse_io_cfg(FILE *);
 struct iop0_params * parse_iop0_stanza(FILE *);
-void set_derived_params(struct io_params *);
-void print_params(struct io_params *);
-int fill(char *, char *, struct io_params *);
 
-int set_conn(char *, struct io_params *);
-int set_sockio(char *, struct io_params *);
-int set_desc_t(char *, struct io_params *);
-int set_ioblock(char *, struct io_params *);
-
-int parse_tuple(char *, char *);
 int is_sock(struct io_params *);
 int is_netsock(struct io_params *);
 int is_src(struct io_params *);
@@ -184,9 +175,6 @@ void free_iop0(struct iop0_params *);
 void free_iop1(struct iop1_params *);
 void free_iop(struct io_params *);
 void free_sock_param(struct sock_param *);
-
-int unix_sockopen(struct io_params *);
-int net_sockopen(struct io_params *);
 
 int validate_cfg(struct io_cfg *);
 void validate_iop(struct io_params *);
