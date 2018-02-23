@@ -40,6 +40,20 @@ if ((r = pthread_mutex_unlock(m)) != 0) {       \
     log_die("mtx unlock error:  %d\n", r);      \
 }
 
+#define UNLOCK(m, l)				\
+if (m->desc_type != TYPE_2) {			\
+    MTX_UNLOCK(&l->mtx_lock);			\
+} else {					\
+    RW_UNLOCK(&l->rw_lock);			\
+}
+
+#define LOCK(m, l)				\
+if (m->desc_type != TYPE_2) {			\
+    MTX_LOCK(&l->mtx_lock);			\
+} else {					\
+    RD_LOCK(&l->rw_lock);			\
+}
+
 int rbuf_tls_writeto(struct io_params *iop)
 {
 	struct sock_param	*sop;
@@ -51,11 +65,7 @@ int rbuf_tls_writeto(struct io_params *iop)
 
 	if (*iop->listready == 0) {
 	    /* THIS THREAD MUST GET THE LOCK FIRST */
-	    if (*iop->type_p != TYPE_2) {
-		MTX_LOCK(&w_ptr->mtx_lock);
-	    } else {
-		WR_LOCK(&w_ptr->rw_lock);
-	    }
+	    LOCK(iop, w_ptr);
 	    rbuf_locksync0(iop);
 	}
 
@@ -69,12 +79,8 @@ int rbuf_tls_writeto(struct io_params *iop)
 		    w_ptr = w_ptr->next;
 		    continue;
 		} else {
-		    if (do_rderr(iop, w_ptr->len) >= 0) {
-			continue;
-		    } else {
-			do_close(iop, w_ptr);
+		    if (do_rderr(iop, w_ptr) < 0)
 			return -1;
-		    }
 		}
 	    }
 	} else {
@@ -87,12 +93,8 @@ int rbuf_tls_writeto(struct io_params *iop)
 		    w_ptr = w_ptr->next;
 		    continue;
 		} else {
-		    if (do_rderr(iop, w_ptr->len) >= 0) {
-			continue;
-		    } else {
-			do_close(iop, w_ptr);
+		    if (do_rderr(iop, w_ptr) < 0)
 			return -1;
-		    }
 		}
 	    }
 	}
@@ -128,12 +130,8 @@ int rbuf_tls_readfrom(struct io_params *iop)
 			iop->bytes += nw;
 			continue;
 		    } else if (nw <= 0) {
-			if (do_wrerr(iop, nw, (void *)&r_ptr->mtx_lock) >= 0) {
-			    continue;
-			} else {
-			    do_close(iop, r_ptr);
+			if (do_wrerr(iop, r_ptr) < 0)
 			    return -1;
-			}
 		    }
 		}
 	    }
@@ -157,12 +155,8 @@ int rbuf_tls_readfrom(struct io_params *iop)
 			iop->bytes += nw;
 			continue;
 		    } else if (nw <= 0) {
-			if (do_wrerr(iop, nw, (void *)&r_ptr->rw_lock) >= 0) {
-			    continue;
-			} else {
-			    do_close(iop, r_ptr);
+			if (do_wrerr(iop, r_ptr) < 0)
 			    return -1;
-			}
 		    }
 		}
 	    }
@@ -178,17 +172,15 @@ int rbuf_writeto(struct io_params *iop)
 
 	if (*iop->listready == 0) {
 	    /* THIS THREAD MUST GET THE LOCK FIRST */
-	    if (*iop->type_p != TYPE_2) {
-		MTX_LOCK(&w_ptr->mtx_lock);
-	    } else {
-		WR_LOCK(&w_ptr->rw_lock);
-	    }
+	    LOCK(iop, w_ptr);
 	    rbuf_locksync0(iop);
 	}
 
 	if (*iop->type_p != TYPE_2) {
 	    for (;;) {
+		printf("CALLING READ\n");
 		if ((w_ptr->len = read(iop->io_fd, w_ptr->line, iop->buf_sz)) > 0) {
+		    printf("POST CALLING READ\n");
 		    MTX_LOCK(&w_ptr->next->mtx_lock);
 		    MTX_UNLOCK(&w_ptr->mtx_lock);
 		    iop->bytes += w_ptr->len;
@@ -196,10 +188,10 @@ int rbuf_writeto(struct io_params *iop)
 		    w_ptr = w_ptr->next;
 		    continue;
 		} else {
-		    if (do_rderr(iop, w_ptr->len) >= 0) {
-			continue;
-		    } else {
-			do_close(iop, w_ptr);
+		    printf("CALLING READ ERROR: %d\n", w_ptr->len);
+		    if (do_rderr(iop, w_ptr) < 0) {
+			printf("READ ERROR RETURNED BADLY\n");
+			return -1;
 		    }
 		}
 	    }
@@ -213,12 +205,8 @@ int rbuf_writeto(struct io_params *iop)
 		    w_ptr = w_ptr->next;
 		    continue;
 		} else {
-		    if (do_rderr(iop, w_ptr->len) >= 0) {
-			continue;
-		    } else {
-			do_close(iop, w_ptr);
+		    if (do_rderr(iop, w_ptr) < 0)
 			return -1;
-		    }
 		}
 	    }
 	}
@@ -253,12 +241,8 @@ int rbuf_readfrom(struct io_params *iop)
 			iop->bytes += nw;
 			continue;
 		    } else if (nw <= 0) {
-			if (do_wrerr(iop, nw, (void *)&r_ptr->mtx_lock) >= 0)
-			    continue;
-			else {
-			    do_close(iop, r_ptr);
+			if (do_wrerr(iop, r_ptr) < 0)
 			    return -1;
-			}
 		    }
 		}
 	    }
@@ -282,12 +266,8 @@ int rbuf_readfrom(struct io_params *iop)
 			iop->bytes += nw;
 			continue;
 		    } else if (nw <= 0) {
-			if (do_wrerr(iop, nw, (void *)&r_ptr->rw_lock) >= 0)
-			    continue;
-			else {
-			    do_close(iop, r_ptr);
+			if (do_wrerr(iop, r_ptr) < 0)
 			    return -1;
-			}
 		    }
 		}
 	    }
@@ -328,12 +308,11 @@ int rbuf_t3_tlsreadfrom(struct io_params *iop)
 		    continue;
 		} else if (nw <= 0) {
 		    MTX_UNLOCK(&iop->fd_lock);
-		    if (do_wrerr(iop, nw, (void *)&r_ptr->mtx_lock) >= 0) {
+		    if (do_wrerr(iop, r_ptr) < 0) {
+			return -1;
+		    } else {
 			MTX_LOCK(&iop->fd_lock);
 			continue;
-		    } else {
-			do_close(iop, r_ptr);
-			return -1;
 		    }
 		}
 	    }
@@ -372,12 +351,11 @@ int rbuf_t3_readfrom(struct io_params *iop)
 		    continue;
 		} else if (nw <= 0) {
 		    MTX_UNLOCK(&iop->fd_lock);
-		    if (do_wrerr(iop, nw, (void *)&r_ptr->mtx_lock) >= 0) {
+		    if (do_wrerr(iop, r_ptr) < 0) {
+			return -1;
+		    } else {
 			MTX_LOCK(&iop->fd_lock);
 			continue;
-		    } else {
-			do_close(iop, r_ptr);
-			return -1;
 		    }
 		}
 	    }
@@ -489,47 +467,50 @@ void rbuf_locksync(struct io_params *iop)
         MTX_UNLOCK(&iop->listlock);
 }
 
-int do_rderr(struct io_params *iop, int n)
+int do_rderr(struct io_params *iop, struct rbuf_entry *rb)
 {
 	int	r;
 
-	if (n == 0 && use_tls(iop)) {
+	if (rb->len == 0 && iop->desc_type == TCP_SOCK) {
+	    do_close(iop, rb);
 	    return -1;
-	} else if (n == 0) {
+	} else if (rb->len == 0) {
 	    sleep(3);
 	    return 0;
 	}
 
-	if ((r = io_error(iop, errno, n)) == 0) {
+	if ((r = io_error(iop, errno, rb->len)) == 0) {
 	    sleep(3); /* XXX BETTER TO CALL select() HERE? */
 	    return 0;
-	} else if (r == 1)
+	} else if (r == 1) {
 	    return 0;
-	else
+	} else {
+	    do_close(iop, rb);
 	    return -1;
+	}
 }
 
-int do_wrerr(struct io_params *iop, int n, void *l)
+int do_wrerr(struct io_params *iop, struct rbuf_entry *rb)
 {
 	int r;
 
-	if (n == 0) {
-	    sleep_unlocked(iop, 3, l);
+	if (rb->len == 0) {
+	    sleep_unlocked(iop, 3, rb);
 	    return 0;
 	}
 
-	r = io_error(iop, errno, n);
+	r = io_error(iop, errno, rb->len);
 	if (r == 1) /* recv'd EAGAIN or EINTR */
 	   return 0;
 	else if (r == 0) {
-	    sleep_unlocked(iop, 3, l);
+	    sleep_unlocked(iop, 3, rb);
 	    return 0;
 	} else
 	    /* LOG SOMETHING? */
 	    return -1;
 }
 
-void sleep_unlocked(struct io_params *iop, int n, void *lck)
+void sleep_unlocked(struct io_params *iop, int n, struct rbuf_entry *rb)
 {
 	int r;
 	pthread_mutex_t		*mtx;
@@ -537,37 +518,10 @@ void sleep_unlocked(struct io_params *iop, int n, void *lck)
 
 	printf("sleep_unlocked() called\n");
 
-	if (*iop->type_p != TYPE_2) {
-	    MTX_UNLOCK((pthread_mutex_t *)lck);
-	    printf("sleeping\n");
-	    sleep(n);
-	    MTX_LOCK((pthread_mutex_t *)lck);
-	} else {
-	    RW_UNLOCK((pthread_rwlock_t *)lck);
-	    sleep(n);
-	    RD_LOCK((pthread_rwlock_t *)lck);
-	}
-}
-
-void thrdfatal_err(struct io_params *iop, void *l)
-{
-	int			r;
-	pthread_mutex_t		*mtx;
-	pthread_rwlock_t	*rwlk;
-
-	log_ret("write() error:", errno);  /* WHAT'S ERRNO HERE? */
-	unlock(iop, l);
-}
-
-void unlock(struct io_params *iop, void *l)
-{	
-	int r;
-
-	if (*iop->type_p != TYPE_2) {
-	    MTX_UNLOCK((pthread_mutex_t *)l);
-	} else {
-	    RW_UNLOCK((pthread_rwlock_t *)l);
-	}
+	UNLOCK(iop, rb);
+	printf("sleeping\n");
+	sleep(n);
+	LOCK(iop, rb);
 }
 
 struct rbuf_entry *set_rbuf_lock(struct io_params *iop)
@@ -577,12 +531,8 @@ struct rbuf_entry *set_rbuf_lock(struct io_params *iop)
 	if (*iop->listready == 0)
 	    rbuf_locksync(iop);
 
-	if (*iop->type_p != TYPE_2) {
-	    MTX_LOCK(&iop->r_ptr->mtx_lock);
-	} else {
-	    RD_LOCK(&iop->r_ptr->rw_lock);
-	}
-	return iop->r_ptr;;
+	LOCK(iop, iop->r_ptr);
+	return iop->r_ptr;
 }
 
 void do_close(struct io_params *iop, struct rbuf_entry *rb)
@@ -603,11 +553,8 @@ void do_close(struct io_params *iop, struct rbuf_entry *rb)
 	else
 	    iop->r_ptr = rb;
 
-	if (iop->desc_type != TYPE_2 && is_dst(iop)) {
-	    MTX_UNLOCK((pthread_mutex_t *)&rb->mtx_lock);
-	} else if (iop->desc_type == TYPE_2 && is_dst(iop)) {
-	    RW_UNLOCK((pthread_rwlock_t *)&rb->rw_lock);
-	}
+	if (is_dst(iop))
+	    UNLOCK(iop, rb);
 
 	report_close_error(iop);
 }
@@ -615,21 +562,31 @@ void do_close(struct io_params *iop, struct rbuf_entry *rb)
 void report_close_error(struct io_params *iop)
 {
 	char	*h;
+	struct sock_param	*sop;
+
+	sop = iop->sock_data;
 
 	if (is_netsock(iop)) {
-	    if (iop->sock_data->ip != NULL)
-		h = iop->sock_data->ip;
+	    if (sop->ip != NULL)
+		h = sop->ip;
 	    else
-		h = iop->sock_data->hostname;
+		h = sop->hostname;
 
-	    if (use_tls(iop))
-		log_msg("Lost TLS connection to %s\n", h);
-	    else
-		log_msg("Lost connection to %s\n", h);
-
+	    if (sop->conn_type == SRVR) {
+		if (use_tls(iop))
+		    log_msg("Lost TLS connection to client\n");
+	        else
+		    log_msg("Lost connection to client\n");
+	    } else {
+		if (use_tls(iop))
+		    log_msg("Lost TLS connection to server %s\n", h);
+	        else
+		    log_msg("Lost connection to server %s\n", h);
+	    }
 	} else if (iop->desc_type == UNIX_SOCK) {
 	    log_msg("Lost connection to unix sock %s\n", iop->path);
 	} else {
 	    log_msg("Descriptor closed for %s\n", iop->path);
 	}
 }
+

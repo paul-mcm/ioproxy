@@ -63,11 +63,11 @@ void unlock(struct io_params *, void *);
 void read_cleanup(void *);
 struct rbuf_entry *new_rbuf(int, int);
 void free_rbuf(struct rbuf_entry *);
-void sleep_unlocked(struct io_params *, int, void *);
+void sleep_unlocked(struct io_params *, int, struct rbuf_entry *);
 
 int io_error(struct io_params *, int, int);
-int do_wrerr(struct io_params *, int n, void *);
-int do_rderr(struct io_params *, int n);
+int do_wrerr(struct io_params *, struct rbuf_entry *);
+int do_rderr(struct io_params *, struct rbuf_entry *);
 
 void rbuf_locksync0(struct io_params *);
 void rbuf_locksync(struct io_params *);
