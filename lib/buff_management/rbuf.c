@@ -125,7 +125,7 @@ int rbuf_tls_readfrom(struct io_params *iop)
 			MTX_UNLOCK(&r_ptr->mtx_lock);
 			CNT_UPDATE(iop, nw);
 			r_ptr = r_ptr->next;
-			continue;
+			break;
 		    } else if (nw < r_ptr->len && nw > 0) {
 			nleft -= nw;
 			lptr += nw;
@@ -149,7 +149,7 @@ int rbuf_tls_readfrom(struct io_params *iop)
 			RW_UNLOCK(&r_ptr->rw_lock);
 			CNT_UPDATE(iop, nw);
 			r_ptr = r_ptr->next;
-			continue;
+			break;
 		    } else if (nw < r_ptr->len && nw > 0) {
 			nleft -= nw;
 			lptr += nw;
@@ -228,7 +228,7 @@ int rbuf_readfrom(struct io_params *iop)
 			MTX_UNLOCK(&r_ptr->mtx_lock);
 			CNT_UPDATE(iop, nw);
 			r_ptr = r_ptr->next;
-			continue;
+			break;
 		    } else if (nw < r_ptr->len && nw > 0) {
 			nleft -= nw;
 			lptr += nw;
@@ -252,7 +252,7 @@ int rbuf_readfrom(struct io_params *iop)
 			RW_UNLOCK(&r_ptr->rw_lock);
 			CNT_UPDATE(iop, nw);
 			r_ptr = r_ptr->next;
-			continue;
+			break;
 		    } else if (nw < r_ptr->len && nw > 0) {
 			nleft -= nw;
 			lptr += nw;
@@ -292,7 +292,7 @@ int rbuf_t3_tlsreadfrom(struct io_params *iop)
 		    MTX_LOCK(&iop->fd_lock);
 		    CNT_UPDATE(iop, nw);
 		    r_ptr = r_ptr->next;
-		    continue;
+		    break;
 		} else if (nw < r_ptr->len && nw > 0) {
 		    nleft -= nw;
 		    lptr += nw;
@@ -334,7 +334,7 @@ int rbuf_t3_readfrom(struct io_params *iop)
 		    MTX_UNLOCK(&r_ptr->mtx_lock);
 		    MTX_LOCK(&iop->fd_lock);
 		    r_ptr = r_ptr->next;
-		    continue;
+		    break;
 		} else if (nw < r_ptr->len && nw > 0) {
 		    nleft -= nw;
 		    lptr += nw;
