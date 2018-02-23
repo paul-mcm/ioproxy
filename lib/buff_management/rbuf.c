@@ -120,7 +120,6 @@ int rbuf_tls_readfrom(struct io_params *iop)
 		while (nleft > 0) {
 		    nw = tls_write(sop->tls_ctx, lptr, r_ptr->len);
 		    if (nw == r_ptr->len) {
-			nleft -= nw;
 			MTX_LOCK(&r_ptr->next->mtx_lock);
 			MTX_UNLOCK(&r_ptr->mtx_lock);
 			CNT_UPDATE(iop, nw);
@@ -144,7 +143,6 @@ int rbuf_tls_readfrom(struct io_params *iop)
 		while (nleft > 0) {
 		    nw = tls_write(sop->tls_ctx, lptr, r_ptr->len);
 		    if (nw == r_ptr->len) {
-			nleft -= nw;
 			RD_LOCK(&r_ptr->next->rw_lock);
 			RW_UNLOCK(&r_ptr->rw_lock);
 			CNT_UPDATE(iop, nw);
@@ -223,7 +221,6 @@ int rbuf_readfrom(struct io_params *iop)
 		while (nleft > 0) {
 		    nw = write(iop->io_fd, lptr, r_ptr->len);
 		    if (nw == r_ptr->len) {
-			nleft -= nw;
 			MTX_LOCK(&r_ptr->next->mtx_lock);
 			MTX_UNLOCK(&r_ptr->mtx_lock);
 			CNT_UPDATE(iop, nw);
@@ -247,7 +244,6 @@ int rbuf_readfrom(struct io_params *iop)
 		while (nleft > 0) {
 		    nw = write(iop->io_fd, lptr, r_ptr->len);
 		    if (nw == r_ptr->len) {
-			nleft -= nw;
 			RD_LOCK(&r_ptr->next->rw_lock);
 			RW_UNLOCK(&r_ptr->rw_lock);
 			CNT_UPDATE(iop, nw);
@@ -286,7 +282,6 @@ int rbuf_t3_tlsreadfrom(struct io_params *iop)
 		nw = tls_write(sop->tls_ctx, lptr, r_ptr->len);
 		if (nw == r_ptr->len) {
 		    MTX_UNLOCK(&iop->fd_lock);
-		    nleft -= nw;
 		    MTX_LOCK(&r_ptr->next->mtx_lock);
 		    MTX_UNLOCK(&r_ptr->mtx_lock);
 		    MTX_LOCK(&iop->fd_lock);
@@ -327,7 +322,6 @@ int rbuf_t3_readfrom(struct io_params *iop)
 	    while (nleft > 0) {
 		nw = write(*iop->iofd_p, lptr, r_ptr->len);
 		if (nw == r_ptr->len) {
-		    nleft -= nw;
 		    CNT_UPDATE(iop, nw);
 		    MTX_UNLOCK(&iop->fd_lock);
 		    MTX_LOCK(&r_ptr->next->mtx_lock);
