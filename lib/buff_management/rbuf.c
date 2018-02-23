@@ -58,6 +58,10 @@ if (m->desc_type != TYPE_2) {			\
 a->bytes += b;					\
 a->io_cnt++;
 
+#define SHORT_WRTCNT(a, b, c, d)		\
+b -= a;						\
+c += a;						\
+d += a;
 
 int rbuf_tls_writeto(struct io_params *iop)
 {
@@ -126,9 +130,7 @@ int rbuf_tls_readfrom(struct io_params *iop)
 			r_ptr = r_ptr->next;
 			break;
 		    } else if (nw < r_ptr->len && nw > 0) {
-			nleft -= nw;
-			lptr += nw;
-			iop->bytes += nw;
+			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
 			continue;
 		    } else if (nw <= 0) {
 			if (do_wrerr(iop, r_ptr) < 0)
@@ -149,9 +151,7 @@ int rbuf_tls_readfrom(struct io_params *iop)
 			r_ptr = r_ptr->next;
 			break;
 		    } else if (nw < r_ptr->len && nw > 0) {
-			nleft -= nw;
-			lptr += nw;
-			iop->bytes += nw;
+			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
 			continue;
 		    } else if (nw <= 0) {
 			if (do_wrerr(iop, r_ptr) < 0)
@@ -227,9 +227,7 @@ int rbuf_readfrom(struct io_params *iop)
 			r_ptr = r_ptr->next;
 			break;
 		    } else if (nw < r_ptr->len && nw > 0) {
-			nleft -= nw;
-			lptr += nw;
-			iop->bytes += nw;
+			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
 			continue;
 		    } else if (nw <= 0) {
 			if (do_wrerr(iop, r_ptr) < 0)
@@ -250,9 +248,7 @@ int rbuf_readfrom(struct io_params *iop)
 			r_ptr = r_ptr->next;
 			break;
 		    } else if (nw < r_ptr->len && nw > 0) {
-			nleft -= nw;
-			lptr += nw;
-			iop->bytes += nw;
+			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
 			continue;
 		    } else if (nw <= 0) {
 			if (do_wrerr(iop, r_ptr) < 0)
@@ -289,9 +285,7 @@ int rbuf_t3_tlsreadfrom(struct io_params *iop)
 		    r_ptr = r_ptr->next;
 		    break;
 		} else if (nw < r_ptr->len && nw > 0) {
-		    nleft -= nw;
-		    lptr += nw;
-		    iop->bytes += nw;
+		    SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
 		    continue;
 		} else if (nw <= 0) {
 		    MTX_UNLOCK(&iop->fd_lock);
@@ -330,9 +324,7 @@ int rbuf_t3_readfrom(struct io_params *iop)
 		    r_ptr = r_ptr->next;
 		    break;
 		} else if (nw < r_ptr->len && nw > 0) {
-		    nleft -= nw;
-		    lptr += nw;
-		    iop->bytes += nw;
+		    SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
 		    continue;
 		} else if (nw <= 0) {
 		    MTX_UNLOCK(&iop->fd_lock);
