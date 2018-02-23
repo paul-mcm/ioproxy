@@ -58,9 +58,6 @@ int rbuf_tls_readfrom(struct io_params *);
 int rbuf_t3_readfrom(struct io_params *);
 int rbuf_t3_tlsreadfrom(struct io_params *);
 
-void unlock(struct io_params *, void *);
-
-void read_cleanup(void *);
 struct rbuf_entry *new_rbuf(int, int);
 void free_rbuf(struct rbuf_entry *);
 void sleep_unlocked(struct io_params *, int, struct rbuf_entry *);
