@@ -111,7 +111,8 @@ int rbuf_tls_readfrom(struct io_params *iop)
 {
         struct rbuf_entry	*r_ptr;
 	struct sock_param	*sop;
-	int 			nleft, nw, r;
+	ssize_t			nw;
+	int 			nleft, r;
 	char			*lptr;
 
 	sop = iop->sock_data;
@@ -207,10 +208,10 @@ int rbuf_writeto(struct io_params *iop)
 
 int rbuf_readfrom(struct io_params *iop)
 {
-        struct rbuf_entry *r_ptr;
-	int nleft;
-        int r, nw;
-	char *lptr;
+        struct rbuf_entry 	*r_ptr;
+	int 			nleft, r;
+	ssize_t			nw;
+	char			*lptr;
 
 	r_ptr = set_rbuf_lock(iop);
 
@@ -264,7 +265,8 @@ int rbuf_t3_tlsreadfrom(struct io_params *iop)
         struct rbuf_entry 	*r_ptr;
 	struct sock_param	*sop;
 	char			*lptr;
-        int 			r, nw, nleft;
+	ssize_t			nw;
+        int 			r, nleft;
 
 	sop = iop->sock_data;
 	r_ptr = set_rbuf_lock(iop);
@@ -302,9 +304,10 @@ int rbuf_t3_tlsreadfrom(struct io_params *iop)
 
 int rbuf_t3_readfrom(struct io_params *iop)
 {
-        struct rbuf_entry *r_ptr;
-        int r, nw, nleft;
-	char *lptr;
+        struct rbuf_entry	*r_ptr;
+	ssize_t			nw
+        int 			r, nleft;
+	char			*lptr;
 
 	r_ptr = set_rbuf_lock(iop);
 	MTX_LOCK(&iop->fd_lock);
