@@ -318,7 +318,10 @@ void print_config_params(struct io_params *iop)
 
 	if (use_ssh(iop)) {
 		printf("------------- ssh data ---------------\n");
-		printf("hostname: %s\n", sop->hostname);
+		if (sop->hostname != NULL)
+		    printf("hostname: %s\n", sop->hostname);
+		if (sop->ip != NULL)
+		    printf("ip: %s\n", sop->ip);
 		printf("Command: %s\n", sop->ssh_cmd);
 	} else if (is_sock(iop) && iop->desc_type != SSH) {
 		printf("----- sock_data -----\n");

@@ -117,7 +117,7 @@ struct io_params {
 	pthread_mutex_t		fd_lock;	/* s */
 	int			buf_sz;
 	int			io_fd;
-	int			*iofd_p;		/* TYPE 3 ONLY */
+	int			*iofd_p;	/* TYPE 3 ONLY */
         char			*path;
 	int			nonblock;
 	int			*listready;	/* s */

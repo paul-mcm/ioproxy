@@ -69,19 +69,25 @@ int open_sshsession(struct io_params *iop)
 {
 	struct sock_param	*sop;
 	ssh_session		ssh_s;
+	char			*h;
 	int			r;
 
 	sop = iop->sock_data;
 
+	if (sop->ip != NULL)
+	    h = sop->ip;
+	else
+	    h = sop->hostname;
+
 	if ((sop->ssh_s = ssh_new()) == NULL)
 	    log_die("ERror creating ssh session\n");
 
-	ssh_options_set(sop->ssh_s, SSH_OPTIONS_HOST, sop->hostname);
+	ssh_options_set(sop->ssh_s, SSH_OPTIONS_HOST, h);
         r = ssh_connect(sop->ssh_s);
 
         if (r != SSH_OK) {
             log_msg("Error connecting to host: %s %s\n",
-             sop->hostname, ssh_get_error(sop->ssh_s));
+             h, ssh_get_error(sop->ssh_s));
             return (-2);
         }
 
