@@ -48,10 +48,12 @@ if (m->desc_type != TYPE_2) {			\
 }
 
 #define LOCK(m, l)				\
-if (m->desc_type != TYPE_2) {			\
+if (*m->type_p != TYPE_2) {			\
     MTX_LOCK(&l->mtx_lock);			\
-} else {					\
+} else if (*m->type_p == TYPE_2) {		\
     RD_LOCK(&l->rw_lock);			\
+} else	{					\
+    printf("THE NO CASE\n");			\
 }
 
 #define CNT_UPDATE(a, b)			\
@@ -62,6 +64,58 @@ a->io_cnt++;
 b -= a;						\
 c += a;						\
 d += a;
+
+int rbuf_ssh_writeto(struct io_params *iop)
+{
+	struct sock_param	*sop;
+	struct rbuf_entry	*w_ptr;
+	int 			i, r;
+
+	sop = iop->sock_data;
+	w_ptr = iop->w_ptr;
+
+	if (*iop->listready == 0) {
+	    /* THIS THREAD MUST GET THE LOCK FIRST */
+	    LOCK(iop, w_ptr);
+	    rbuf_locksync0(iop);
+	}
+
+	r = ssh_channel_request_exec(sop->ssh_chan, sop->ssh_cmd);
+	if (r != SSH_OK) {
+	    printf("ssh_channel_request_exec() not ok!\n");
+            ssh_channel_close(sop->ssh_chan);
+            ssh_channel_free(sop->ssh_chan);
+            return -1;
+        }
+
+	if (*iop->type_p != TYPE_2) {
+	    for (;;) {
+		if ((w_ptr->len = ssh_channel_read(sop->ssh_chan, w_ptr->line, iop->buf_sz, 0)) > 0) {
+		    MTX_LOCK(&w_ptr->next->mtx_lock);
+		    MTX_UNLOCK(&w_ptr->mtx_lock);
+		    CNT_UPDATE(iop, w_ptr->len);
+		    w_ptr = w_ptr->next;
+		    continue;
+		} else {
+		    printf("returned 0\n");
+		    sleep(2);
+		    continue;
+		}
+	    }
+	} else {
+	    for (;;) {
+		if ((w_ptr->len = ssh_channel_read(sop->ssh_chan, w_ptr->line, iop->buf_sz, 0)) > 0) {
+		    WR_LOCK(&w_ptr->next->rw_lock);
+		    RW_UNLOCK(&w_ptr->rw_lock);
+		    CNT_UPDATE(iop, w_ptr->len);
+		    w_ptr = w_ptr->next;
+		    continue;
+		} else {
+		    return 0;
+		}
+	    }
+	}
+}
 
 int rbuf_tls_writeto(struct io_params *iop)
 {
@@ -305,7 +359,7 @@ int rbuf_t3_tlsreadfrom(struct io_params *iop)
 int rbuf_t3_readfrom(struct io_params *iop)
 {
         struct rbuf_entry	*r_ptr;
-	ssize_t			nw
+	ssize_t			nw;
         int 			r, nleft;
 	char			*lptr;
 

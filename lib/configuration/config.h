@@ -35,6 +35,8 @@
 #include <syslog.h>
 #include <unistd.h>
 
+#include <libssh/libssh.h>
+
 /* #include "../buff_management/rbuf.h" */
 
 #define FALSE		0
@@ -58,7 +60,8 @@ typedef enum {
 	STDIN,
 	UNIX_SOCK,
 	TCP_SOCK,
-	UDP_SOCK
+	UDP_SOCK,
+	SSH
 } T_FD;
 
 typedef enum {
@@ -75,6 +78,7 @@ struct sock_param {
         T_SOCK		conn_type;
         T_SOCKIO	sockio;
 	int		tls;
+	int		ssh;
         char		*ip;
 	int		listenfd;
         char	     	*tls_port;
@@ -87,6 +91,9 @@ struct sock_param {
 	char		*srvr_key;
 	struct tls	*tls_ctx;	
 	int		cert_vrfy;
+	char		*ssh_cmd;
+	ssh_session	ssh_s;
+	ssh_channel	ssh_chan;	
 };
 
 /* s - shared
@@ -152,6 +159,7 @@ int is_netsock(struct io_params *);
 int is_src(struct io_params *);
 int is_dst(struct io_params *);
 int use_tls(struct io_params *);
+int use_ssh(struct io_params *);
 void report_close_error(struct io_params *);
 
 int valid_path(char *, struct stat *);  /* VALIDATE PATH */

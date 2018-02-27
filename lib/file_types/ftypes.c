@@ -47,6 +47,8 @@ int open_desc(struct io_params *iop)
 		fd = STDIN_FILENO;
 	    } else if (iop->desc_type == STDOUT) {
 		fd = STDOUT_FILENO;
+	    } else if (iop->desc_type == SSH) {
+		fd = open_sshsession(iop);
 	    } else if (is_netsock(iop)) {
 		fd = open_sock(iop);
 	    } else {
@@ -55,9 +57,67 @@ int open_desc(struct io_params *iop)
 	    }
 	
 	    if (fd >= 0)
-		break;		
+		break;
+
+	    if (fd == -2) /* NON-RECOVERABLE ERROR - NOT WORTH RETRYING */
+		break;
 	}
 	return fd;
+}
+
+int open_sshsession(struct io_params *iop)
+{
+	struct sock_param	*sop;
+	ssh_session		ssh_s;
+	int			r;
+
+	sop = iop->sock_data;
+
+	if ((sop->ssh_s = ssh_new()) == NULL)
+	    log_die("ERror creating ssh session\n");
+
+	ssh_options_set(sop->ssh_s, SSH_OPTIONS_HOST, sop->hostname);
+        r = ssh_connect(sop->ssh_s);
+
+        if (r != SSH_OK) {
+            log_msg("Error connecting to host: %s %s\n",
+             sop->hostname, ssh_get_error(sop->ssh_s));
+            return (-2);
+        }
+
+        if (verify_knownhost(sop->ssh_s) < 0) {
+           log_msg("host verification failed\n");
+           return(-2);
+        }
+
+	if ((r = ssh_userauth_publickey_auto(sop->ssh_s, NULL, NULL)) == SSH_AUTH_SUCCESS) {
+            printf("Success\n");
+        } else if (r == SSH_AUTH_ERROR) {
+            printf("Serious error happened\n");
+	    return -2;
+        } else if (r = SSH_AUTH_DENIED) {
+            printf("auth denied\n");
+	    return -2;
+        } else if (r = SSH_AUTH_PARTIAL) {
+            printf("auth partial\n");
+	    return -1;
+        } else if (r = SSH_AUTH_AGAIN) {
+            printf("again\n");
+	    return -1;
+        }
+
+	sop->ssh_chan = ssh_channel_new(sop->ssh_s);
+	if (sop->ssh_chan == NULL)
+	    return -1;
+
+	r = ssh_channel_open_session(sop->ssh_chan);
+
+        if (r != SSH_OK) {
+	    printf("NOT OK\n");
+            ssh_channel_free(sop->ssh_chan);
+            return -1;
+        }
+	return 0;
 }
 
 int open_fifo(struct io_params *iop)
@@ -77,20 +137,22 @@ int open_fifo(struct io_params *iop)
 		    log_syserr("mkfifo(2) error %s.\n", iop->path);
 		}
 	    } else {
-		log_syserr("stat error for %s: %s", iop->path, errno);
+		log_syserr("stat error for %s", iop->path);
 	    }
 	}
 
 	oflags |= O_NONBLOCK;
+	printf("CALLED open_fifo()1\n");
 
 	for (;;) {
 	    if ((fd = open(iop->path, oflags)) < 0) {
+		printf("CALLED open_fifo()2\n");
 		if (errno == ENXIO) {
-		    log_ret("Destination %s FIFO not writable without reader", iop->path);
+		    log_msg("Destination %s FIFO not writable without reader", iop->path);
 		    sleep(5);
 		    continue;
 		} else {
-		    log_syserr("open(2) error - %s", iop->path);
+		    log_syserr("open(2) error");
 		}
 	    } else {
 		break;
@@ -467,4 +529,70 @@ int set_flags(struct io_params *iop)
 		f |= O_NONBLOCK;
 
 	return f;
+}
+
+int verify_knownhost(ssh_session session)
+{
+
+	int             state, hlen;
+	unsigned char   *hash = NULL;
+	char            *hexa;
+	char            buf[10];
+	ssh_key		k;
+        unsigned char	*h;
+	size_t		*len;
+
+        state = ssh_is_server_known(session);
+
+	if (ssh_get_publickey(session, &k) == SSH_ERROR)
+	    log_msg("Failed to get public key\n");
+
+	if (ssh_get_publickey_hash(k, 1, &h, len) < 0) {
+	    printf("hash failure\n");
+	    return -1;
+	}
+
+        switch (state)
+        {
+            case SSH_SERVER_KNOWN_OK:
+                break; /* ok */
+            case SSH_SERVER_KNOWN_CHANGED:
+                log_msg("Host key for server changed");
+                ssh_clean_pubkey_hash(&h);
+                return -1;
+            case SSH_SERVER_FOUND_OTHER:
+                log_msg("Host key for this server not found; another type of key exists.\n");
+                ssh_clean_pubkey_hash(&h);
+                return -1;
+            case SSH_SERVER_FILE_NOT_FOUND:
+                log_msg("Host file not found.\n");
+            case SSH_SERVER_NOT_KNOWN:
+                hexa = ssh_get_hexa(hash, hlen);
+                log_msg("The server is unknown. Do you trust the host key?\n");
+                fprintf(stderr, "Public key hash: %s\n", hexa);
+                free(hexa);
+
+                if (fgets(buf, sizeof(buf), stdin) == NULL) {
+		    ssh_clean_pubkey_hash(&h);
+                    return -1;
+                }
+
+                if (strncasecmp(buf, "yes", 3) != 0) {
+                    ssh_clean_pubkey_hash(&h);
+                    return -1;
+                }
+
+                if (ssh_write_knownhost(session) < 0) {
+                    fprintf(stderr, "Error %s\n", strerror(errno));
+                    ssh_clean_pubkey_hash(&h);
+                    return -1;
+                }
+                break;
+            case SSH_SERVER_ERROR:
+                fprintf(stderr, "Error %s", ssh_get_error(session));
+                ssh_clean_pubkey_hash(&h);
+                return -1;
+        }
+        ssh_clean_pubkey_hash(&h);
+        return 0;
 }

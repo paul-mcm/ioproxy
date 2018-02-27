@@ -46,6 +46,9 @@ int main(int argc, char *argv[])
 	SIGTERM_STAT = FALSE;
 	SIGHUP_STAT  = FALSE;
 
+	ssh_threads_set_callbacks(ssh_threads_get_pthread());
+	ssh_init();
+
 	LIST_INIT(&all_cfg);
 	read_config(&all_cfg);
 
@@ -235,6 +238,9 @@ void *iop0_thrd(void *arg)
 
 	r = pthread_join(iop->tid, NULL);
 	log_msg("pthread_join() returned\n");
+	/* XXX SHOULDN'T WE KILL THE OTHER THREADS
+	 * FOR THIS CONFIG BEFORE EXITING? 
+	 */
 	pthread_exit(NULL);
 }
 
@@ -271,7 +277,6 @@ void *io_t3_thread(void *arg)
 		    pthread_mutex_unlock(&iop->fd_lock);
 		}
 	    }
-
 
 	    if (is_src(iop))
 		r = rbuf_writeto(iop);
@@ -313,14 +318,20 @@ void *io_thread(void *arg)
 		}
 
 		if ((iop->io_fd = open_desc(iop)) < 0) {
-		    log_msg("open error. Sleeping...\n");
-		    sleep(10);
-		    continue;
+		    if (iop->io_fd == -2) { /* NON RECOVERABLE ERROR */
+			break;
+		    } else {
+			log_msg("open error. Sleeping...\n");
+			sleep(10);
+			continue;
+		    }
 		}
 		/* BLOCK */
 		if (is_src(iop)) {
 		    if (use_tls(iop)) {
 			r = rbuf_tls_writeto(iop);
+		    } else if (use_ssh(iop)) {
+			r = rbuf_ssh_writeto(iop);
 		    } else {
 			r = rbuf_writeto(iop);
 		    }
@@ -346,7 +357,6 @@ void *io_thread(void *arg)
 		}
 	    }
 	}
-
 	log_msg("io_thread returning for %s\n", iop->path);
 	pthread_exit((void *)0);
 	pthread_cleanup_pop(0);

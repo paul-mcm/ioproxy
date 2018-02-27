@@ -17,7 +17,7 @@
 #include "parse_line.h"
 
 const char *tr_fls[] = { "FALSE", "TRUE" };
-const char *desc_types[] = { "REG_FILE", "FIFO", "STDOUT", "STDIN", "UNIX_SOCK", "TCP_SOCK", "UDP_SOCK"};
+const char *desc_types[] = { "REG_FILE", "FIFO", "STDOUT", "STDIN", "UNIX_SOCK", "TCP_SOCK", "UDP_SOCK", "SSH"};
 const char *io_drn[] = { "SRC", "DST" };
 const char *io_types[] = {"TYPE_1", "TYPE_2", "TYPE_3"};
 const char *conn_type[] = { "CLIENT", "SRVR" };
@@ -233,7 +233,8 @@ int is_sock(struct io_params *iop)
 {
         if ((iop->desc_type == UDP_SOCK) || \
 	    (iop->desc_type == TCP_SOCK) || \
-	    (iop->desc_type == UNIX_SOCK))
+	    (iop->desc_type == UNIX_SOCK) || \
+	    (iop->desc_type == SSH))
                 return 1; 
         else 
                 return 0; 
@@ -251,6 +252,14 @@ int is_netsock(struct io_params *iop)
 int use_tls(struct io_params *iop)
 {
 	if (iop->sock_data != NULL && iop->sock_data->tls == TRUE)
+	    return 1;
+	else
+	    return 0;
+}
+
+int use_ssh(struct io_params *iop)
+{
+	if (iop->desc_type == SSH)
 	    return 1;
 	else
 	    return 0;
@@ -288,6 +297,7 @@ int show_all_configs(struct all_cfg_list *all)
 void print_config_params(struct io_params *iop)
 {
 	struct sock_param *sop;
+	sop = iop->sock_data;
 
 	printf("type_p\t\t%s\n", io_types[*iop->type_p]);
 	printf("io_drn:\t\t%s\n", io_drn[iop->io_drn]);
@@ -304,10 +314,14 @@ void print_config_params(struct io_params *iop)
 	printf("nonblock: %d\n", iop->nonblock);
 	printf("io_fd: %d\n", iop->io_fd);
 
-	if (is_sock(iop)) {
-		printf("----- sock_data -----\n");
-		sop = iop->sock_data;
+	printf("path: %s\n", iop->path != NULL ? iop->path : NULL);
 
+	if (use_ssh(iop)) {
+		printf("------------- ssh data ---------------\n");
+		printf("hostname: %s\n", sop->hostname);
+		printf("Command: %s\n", sop->ssh_cmd);
+	} else if (is_sock(iop) && iop->desc_type != SSH) {
+		printf("----- sock_data -----\n");
 		printf("\tconn_type: %s\n", 	conn_type[sop->conn_type]);
 		printf("\tsockio: %s\n", 		sockio[sop->sockio]);
 		printf("\tip: %s\n", 		sop->ip != 0 ? sop->ip : NULL);
@@ -333,7 +347,6 @@ void print_config_params(struct io_params *iop)
 		}
 	}
 
-	printf("path: %s\n", iop->path != NULL ? iop->path : NULL);	
 }
 
 int valid_path(char *p, struct stat *s) 

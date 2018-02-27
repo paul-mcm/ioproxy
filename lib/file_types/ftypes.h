@@ -38,6 +38,7 @@
 
 #include <arpa/inet.h>
 
+#include <libssh/libssh.h>
 #include "../configuration/config.h"
 
 int open_desc(struct io_params *);
@@ -56,3 +57,4 @@ int do_netconnect(struct io_params *);
 
 int do_tlsconnect(struct io_params *);
 int do_tlsaccept(struct io_params *);
+int verify_knownhost(ssh_session);

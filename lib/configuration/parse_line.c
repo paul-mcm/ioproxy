@@ -104,7 +104,7 @@ int fill(char *f, char *v, struct io_params *iop)
 	} else if (strcasecmp(f, "host") == 0) {
 		if ((sop->hostname = malloc(vlen + 1)) == NULL)
 			log_syserr("malloc failure: ");
-		strncpy(sop->hostname, v, vlen + 1);
+		strlcpy(sop->hostname, v, vlen + 1);
 		/* XXX MUST FIX */
 	} else if (strcasecmp(f, "ip") == 0) {
 		sop->ip = malloc(vlen + 1);
@@ -135,6 +135,9 @@ int fill(char *f, char *v, struct io_params *iop)
 	} else if (strcasecmp(f, "srvr_key") == 0) {
 		sop->srvr_key = malloc(vlen + 1);
 		strlcpy(sop->srvr_key, v, vlen + 1);
+	} else if (strcasecmp(f, "cmd") == 0) {
+		sop->ssh_cmd = malloc(vlen + 1);
+		strlcpy(sop->ssh_cmd, v, vlen + 1);
 	} else if (strcasecmp(f, "reqcrt") == 0) {
 		if (strcasecmp(v, "true") == 0)
 		    sop->cert_vrfy = TRUE;
@@ -218,6 +221,8 @@ int set_desc_t(char *t, struct io_params *iop)
 	    iop->desc_type = UDP_SOCK;
 	} else if (strcasecmp(t, "UNIX_SOCK") == 0) {
 	    iop->desc_type = UNIX_SOCK;
+	} else if (strcasecmp(t, "SSH") == 0) {
+	    iop->desc_type = SSH;
 	} else {
 	    log_msg("unknown type: %s\n", t);
 	    err = -1;

@@ -31,6 +31,9 @@
 #include <syslog.h>
 #include <unistd.h>
 
+#include <libssh/libssh.h>
+#include <libssh/callbacks.h>
+
 #include "lib/configuration/config.h"
 #include "lib/buff_management/rbuf.h"
 #include "lib/file_types/ftypes.h"
@@ -53,7 +56,6 @@ void iop_setup(struct io_cfg *);
 void *iop0_thrd(void *);
 
 void copy_io_params(struct io_params *, struct io_params *);
-
 
 
 
