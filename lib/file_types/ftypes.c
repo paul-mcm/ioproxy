@@ -37,22 +37,22 @@ int open_desc(struct io_params *iop)
 	fd = -1;
 
 	for (;;) {
-	    if (iop->desc_type == FIFO) {
+	    if (iop->io_type == FIFO) {
 		fd = open_fifo(iop);
-	    } else if (iop->desc_type == REG_FILE) {
+	    } else if (iop->io_type == REG_FILE) {
 		fd = open_file(iop);
-	    } else if (iop->desc_type == UNIX_SOCK) {
+	    } else if (iop->io_type == UNIX_SOCK) {
 		fd = open_sock(iop);
-	    } else if (iop->desc_type == STDIN) {
+	    } else if (iop->io_type == STDIN) {
 		fd = STDIN_FILENO;
-	    } else if (iop->desc_type == STDOUT) {
+	    } else if (iop->io_type == STDOUT) {
 		fd = STDOUT_FILENO;
-	    } else if (iop->desc_type == SSH) {
+	    } else if (iop->io_type == SSH) {
 		fd = open_sshsession(iop);
 	    } else if (is_netsock(iop)) {
 		fd = open_sock(iop);
 	    } else {
-		log_msg("Unknown type %d", iop->desc_type);
+		log_msg("Unknown type %d", iop->io_type);
 		return -1;
 	    }
 	
@@ -239,7 +239,7 @@ int do_bind(struct io_params *iop)
 	mode_t                  old_umask;
 	socklen_t		len;
 
-	if (iop->desc_type == UNIX_SOCK) {
+	if (iop->io_type == UNIX_SOCK) {
 	    memset(&u_saddr, 0, sizeof(struct sockaddr_un));
 	    u_saddr.sun_family = AF_LOCAL;
 
@@ -284,10 +284,10 @@ int do_bind(struct io_params *iop)
 	    net_saddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	    net_saddr.sin_port = htons(iop->sock_data->port);
 
-	    if (iop->desc_type == UDP_SOCK) {
+	    if (iop->io_type == UDP_SOCK) {
 		if ((lfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
 		    log_syserr("socket() error: ");
-	    } else if (iop->desc_type == TCP_SOCK) {
+	    } else if (iop->io_type == TCP_SOCK) {
 		if ((lfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 		    log_syserr("socket() error: ");
 	    }
@@ -339,7 +339,7 @@ int do_accept(struct io_params *iop)
 	struct sockaddr_un 	cliaddr;
 	int			clilen;
 
-	if (iop->desc_type == UNIX_SOCK) {	
+	if (iop->io_type == UNIX_SOCK) {	
 	    clilen = offsetof(struct sockaddr_un, sun_path) + \
 		strlen(iop->sock_data->sockpath);
 	}
@@ -358,7 +358,7 @@ int do_accept(struct io_params *iop)
 int do_connect(struct io_params *iop)
 {
 
-	if (iop->desc_type == UNIX_SOCK)
+	if (iop->io_type == UNIX_SOCK)
 	    return do_localconnect(iop);
 	else if (use_tls(iop)) {
 	    return do_tlsconnect(iop);
@@ -459,7 +459,7 @@ int do_netconnect(struct io_params *iop)
 	int			s_type;
 
 	sop = iop->sock_data;	
-	s_type = iop->desc_type == TCP_SOCK ? SOCK_STREAM : SOCK_DGRAM;
+	s_type = iop->io_type == TCP_SOCK ? SOCK_STREAM : SOCK_DGRAM;
 
 	bzero(&hints, sizeof(struct addrinfo));
 	hints.ai_family = AF_INET;

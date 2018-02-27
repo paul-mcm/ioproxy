@@ -46,7 +46,7 @@ typedef enum {
 	TYPE_1,		/* 1-to-1    */
 	TYPE_2,		/* 1-to-many */
 	TYPE_3,		/* many-to-1 */
-} T_IO;
+} T_CFG;
 
 typedef enum {
 	SRC,
@@ -62,7 +62,7 @@ typedef enum {
 	TCP_SOCK,
 	UDP_SOCK,
 	SSH
-} T_FD;
+} T_IO;
 
 typedef enum {
 	CLIENT,
@@ -102,8 +102,8 @@ struct sock_param {
 
 struct io_params {
         T_DATA			io_drn;
-        T_FD			desc_type;
-	T_IO			*type_p;
+        T_IO			io_type;
+	T_CFG			*cfgtype_p;
 
 	struct rbuf_entry	*rbuf_p;
 	struct rbuf_entry	*w_ptr;
@@ -138,7 +138,7 @@ struct iop1_params {
 };
 
 struct io_cfg {
-	T_IO			    io_type;
+	T_CFG			    cfg_type;
 	LIST_HEAD(, iop0_params)    iop0_paths;
 	LIST_ENTRY(io_cfg)	    io_cfgs;
 };
@@ -167,7 +167,7 @@ int valid_ftype(int, struct stat *); /* VALIDATE FILE TYPE */
 
 void print_config_params(struct io_params *);
 
-void set_io_type(struct io_cfg *);
+void set_cfg_type(struct io_cfg *);
 T_DATA set_io_dir(char *);
 
 int line_byte_cnt(FILE *);

@@ -41,16 +41,16 @@ if ((r = pthread_mutex_unlock(m)) != 0) {       \
 }
 
 #define UNLOCK(m, l)				\
-if (m->desc_type != TYPE_2) {			\
+if (m->io_type != TYPE_2) {			\
     MTX_UNLOCK(&l->mtx_lock);			\
 } else {					\
     RW_UNLOCK(&l->rw_lock);			\
 }
 
 #define LOCK(m, l)				\
-if (*m->type_p != TYPE_2) {			\
+if (*m->cfgtype_p != TYPE_2) {			\
     MTX_LOCK(&l->mtx_lock);			\
-} else if (*m->type_p == TYPE_2) {		\
+} else if (*m->cfgtype_p == TYPE_2) {		\
     RD_LOCK(&l->rw_lock);			\
 } else	{					\
     printf("THE NO CASE\n");			\
@@ -88,7 +88,7 @@ int rbuf_ssh_writeto(struct io_params *iop)
             return -1;
         }
 
-	if (*iop->type_p != TYPE_2) {
+	if (*iop->cfgtype_p != TYPE_2) {
 	    for (;;) {
 		if ((w_ptr->len = ssh_channel_read(sop->ssh_chan, w_ptr->line, iop->buf_sz, 0)) > 0) {
 		    MTX_LOCK(&w_ptr->next->mtx_lock);
@@ -132,7 +132,7 @@ int rbuf_tls_writeto(struct io_params *iop)
 	    rbuf_locksync0(iop);
 	}
 
-	if (*iop->type_p != TYPE_2) {
+	if (*iop->cfgtype_p != TYPE_2) {
 	    for (;;) {
 		if ((w_ptr->len = tls_read(sop->tls_ctx, w_ptr->line, iop->buf_sz)) > 0) {
 		    MTX_LOCK(&w_ptr->next->mtx_lock);
@@ -172,7 +172,7 @@ int rbuf_tls_readfrom(struct io_params *iop)
 	sop = iop->sock_data;
 	r_ptr = set_rbuf_lock(iop);
 
-	if (*iop->type_p != TYPE_2) {
+	if (*iop->cfgtype_p != TYPE_2) {
 	    for (;;) {
 		lptr = r_ptr->line;
 		nleft = r_ptr->len;
@@ -230,7 +230,7 @@ int rbuf_writeto(struct io_params *iop)
 	    rbuf_locksync0(iop);
 	}
 
-	if (*iop->type_p != TYPE_2) {
+	if (*iop->cfgtype_p != TYPE_2) {
 	    for (;;) {
 		if ((w_ptr->len = read(iop->io_fd, w_ptr->line, iop->buf_sz)) > 0) {
 		    MTX_LOCK(&w_ptr->next->mtx_lock);
@@ -269,7 +269,7 @@ int rbuf_readfrom(struct io_params *iop)
 
 	r_ptr = set_rbuf_lock(iop);
 
-	if (*iop->type_p != TYPE_2) {
+	if (*iop->cfgtype_p != TYPE_2) {
 	    for (;;) {
 		lptr = r_ptr->line;
 		nleft = r_ptr->len;
@@ -505,7 +505,7 @@ int do_rderr(struct io_params *iop, struct rbuf_entry *rb)
 {
 	int	r;
 
-	if (rb->len == 0 && iop->desc_type == TCP_SOCK) {
+	if (rb->len == 0 && iop->io_type == TCP_SOCK) {
 	    do_close(iop, rb);
 	    return -1;
 	} else if (rb->len == 0) {
@@ -614,7 +614,7 @@ void report_close_error(struct io_params *iop)
 	        else
 		    log_msg("Lost connection to server %s\n", h);
 	    }
-	} else if (iop->desc_type == UNIX_SOCK) {
+	} else if (iop->io_type == UNIX_SOCK) {
 	    log_msg("Lost connection to unix sock %s\n", iop->path);
 	} else {
 	    log_msg("Descriptor closed for %s\n", iop->path);

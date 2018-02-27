@@ -17,9 +17,9 @@
 #include "parse_line.h"
 
 const char *tr_fls[] = { "FALSE", "TRUE" };
-const char *desc_types[] = { "REG_FILE", "FIFO", "STDOUT", "STDIN", "UNIX_SOCK", "TCP_SOCK", "UDP_SOCK", "SSH"};
+const char *io_types[] = { "REG_FILE", "FIFO", "STDOUT", "STDIN", "UNIX_SOCK", "TCP_SOCK", "UDP_SOCK", "SSH"};
 const char *io_drn[] = { "SRC", "DST" };
-const char *io_types[] = {"TYPE_1", "TYPE_2", "TYPE_3"};
+const char *cfg_types[] = {"TYPE_1", "TYPE_2", "TYPE_3"};
 const char *conn_type[] = { "CLIENT", "SRVR" };
 const char *sockio[] = { "DGRAM", "STREAM" };
 
@@ -40,7 +40,7 @@ int read_config(struct all_cfg_list *all)
                 if (strncmp(p, "{", 1) == 0) {
                         fseek(fp, -(strlen(p) - 1), SEEK_CUR);
                         iocfg = parse_config(fp); 
-			set_io_type(iocfg);
+			set_cfg_type(iocfg);
 
                         LIST_INSERT_HEAD(all, iocfg, io_cfgs);
 		}
@@ -231,10 +231,10 @@ int is_src(struct io_params *iop)
 
 int is_sock(struct io_params *iop)
 {
-        if ((iop->desc_type == UDP_SOCK) || \
-	    (iop->desc_type == TCP_SOCK) || \
-	    (iop->desc_type == UNIX_SOCK) || \
-	    (iop->desc_type == SSH))
+        if ((iop->io_type == UDP_SOCK) || \
+	    (iop->io_type == TCP_SOCK) || \
+	    (iop->io_type == UNIX_SOCK) || \
+	    (iop->io_type == SSH))
                 return 1; 
         else 
                 return 0; 
@@ -242,8 +242,8 @@ int is_sock(struct io_params *iop)
 
 int is_netsock(struct io_params *iop)
 {
-        if ((iop->desc_type == UDP_SOCK) || \
-	    (iop->desc_type == TCP_SOCK))
+        if ((iop->io_type == UDP_SOCK) || \
+	    (iop->io_type == TCP_SOCK))
                 return 1; 
         else 
                 return 0; 
@@ -259,7 +259,7 @@ int use_tls(struct io_params *iop)
 
 int use_ssh(struct io_params *iop)
 {
-	if (iop->desc_type == SSH)
+	if (iop->io_type == SSH)
 	    return 1;
 	else
 	    return 0;
@@ -271,7 +271,7 @@ int show_config(struct io_cfg *iocfg)
 	struct iop1_params *iop1;
 
 	log_msg("========= START CONFIG ==========\n");
-	log_msg("io_type\t\t%s\n", io_types[iocfg->io_type]);
+	log_msg("cfg_type\t\t%s\n", cfg_types[iocfg->cfg_type]);
 
 	LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths) {
 		log_msg("------- iop0 path -----------\n");
@@ -299,9 +299,9 @@ void print_config_params(struct io_params *iop)
 	struct sock_param *sop;
 	sop = iop->sock_data;
 
-	printf("type_p\t\t%s\n", io_types[*iop->type_p]);
+	printf("cfgtype_p\t\t%s\n", cfg_types[*iop->cfgtype_p]);
 	printf("io_drn:\t\t%s\n", io_drn[iop->io_drn]);
-	printf("desc_type:\t\t%s\n", desc_types[iop->desc_type]);
+	printf("io_type:\t\t%s\n", io_types[iop->io_type]);
 	printf("rbuf_p addr: %p\n", iop->rbuf_p);
 	printf("io_fd ptr: %p\n", iop->io_fd);
 	printf("fd_lock ptr: %p\n", iop->fd_lock);
@@ -323,7 +323,7 @@ void print_config_params(struct io_params *iop)
 		if (sop->ip != NULL)
 		    printf("ip: %s\n", sop->ip);
 		printf("Command: %s\n", sop->ssh_cmd);
-	} else if (is_sock(iop) && iop->desc_type != SSH) {
+	} else if (is_sock(iop) && iop->io_type != SSH) {
 		printf("----- sock_data -----\n");
 		printf("\tconn_type: %s\n", 	conn_type[sop->conn_type]);
 		printf("\tsockio: %s\n", 		sockio[sop->sockio]);
@@ -377,12 +377,12 @@ int valid_ftype(int n, struct stat *s)
         else {
                 log_msg("File type inconsistancy: \
 			%s is not a what it's supposed to be", \
-                        desc_types[n]);
+                        io_types[n]);
                 return(-1);
         }
 }
 
-void set_io_type(struct io_cfg *iocfg)
+void set_cfg_type(struct io_cfg *iocfg)
 {
         int 			n;
 	struct iop0_params	*iop0;
@@ -393,17 +393,17 @@ void set_io_type(struct io_cfg *iocfg)
                 n++;
 
         if (n == 1 && iop0->iop->io_drn == SRC)
-                iocfg->io_type = TYPE_1;
+                iocfg->cfg_type = TYPE_1;
         if (n == 1 && iop0->iop->io_drn == DST)
-                iocfg->io_type = TYPE_3;
+                iocfg->cfg_type = TYPE_3;
         else if (n > 1 && iop0->iop->io_drn == SRC)
-                iocfg->io_type = TYPE_2;
+                iocfg->cfg_type = TYPE_2;
         else if (n > 1 && iop0->iop->io_drn == DST)
-                iocfg->io_type = TYPE_3;
+                iocfg->cfg_type = TYPE_3;
 
-	iop0->iop->type_p = &iocfg->io_type;
+	iop0->iop->cfgtype_p = &iocfg->cfg_type;
         LIST_FOREACH(iop1, &iop0->io_paths, io_paths)
-		iop1->iop->type_p = &iocfg->io_type;
+		iop1->iop->cfgtype_p = &iocfg->cfg_type;
 
 }
 
@@ -568,7 +568,7 @@ int validate_cfg(struct io_cfg *iocfg)
 
 void validate_iop(struct io_params *iop)
 {
-	if (iop->desc_type == TCP_SOCK || iop->desc_type == UDP_SOCK)
+	if (iop->io_type == TCP_SOCK || iop->io_type == UDP_SOCK)
 	    validate_sockparams(iop);
 }
 
@@ -577,13 +577,13 @@ void validate_sockparams(struct io_params *iop)
 	struct sock_param *sop;
 	sop = iop->sock_data;
 
-	if (iop->desc_type == TCP_SOCK)
+	if (iop->io_type == TCP_SOCK)
 	    sop->sockio == STREAM;
-	else if (iop->desc_type == TCP_SOCK || iop->desc_type == UDP_SOCK || UNIX_SOCK)
+	else if (iop->io_type == TCP_SOCK || iop->io_type == UDP_SOCK || UNIX_SOCK)
 	    sop->sockio == DGRAM;
 
 	if (sop->conn_type == SRVR) {
-	    if (iop->desc_type == UDP_SOCK)
+	    if (iop->io_type == UDP_SOCK)
 		log_die("Config error: No udp listening sockets");
 	    if (sop->hostname != NULL)
 		log_msg("Config notice: hostnames ignored for server listening sockets\n");
@@ -604,7 +604,7 @@ void validate_sockparams(struct io_params *iop)
 	    if (sop->conn_type == SRVR && sop->srvr_key == NULL)
 		log_die("Server TLS requires filenames for server's private key\n");
 
-	    if (iop->desc_type == UDP_SOCK && sop->tls == TRUE)
+	    if (iop->io_type == UDP_SOCK && sop->tls == TRUE)
 		log_die("Config errer: no TLS available for UDP sockets");
 
 	}

@@ -82,9 +82,9 @@ int fill(char *f, char *v, struct io_params *iop)
 		iop->sock_data = sock_param_alloc();
 		sop = iop->sock_data;
 	    }
-	    if (iop->desc_type == TCP_SOCK) {
+	    if (iop->io_type == TCP_SOCK) {
 		sop->sockio = STREAM;
-	    } else if (is_sock(iop) && iop->desc_type != TCP_SOCK) {
+	    } else if (is_sock(iop) && iop->io_type != TCP_SOCK) {
 		sop->sockio = DGRAM;
 	    }
 	} else if (strcasecmp(f, "dir") == 0) {
@@ -208,21 +208,21 @@ int set_desc_t(char *t, struct io_params *iop)
 	int err = 0;
 
 	if (strcasecmp(t, "FIFO") == 0)
-	    iop->desc_type = FIFO;
+	    iop->io_type = FIFO;
 	else if (strcasecmp(t, "FILE") == 0)
-	    iop->desc_type = REG_FILE;
+	    iop->io_type = REG_FILE;
 	else if (strcasecmp(t, "STDIN") == 0)
-	    iop->desc_type = STDIN;
+	    iop->io_type = STDIN;
 	else if (strcasecmp(t, "STDOUT") == 0)
-	    iop->desc_type = STDOUT;
+	    iop->io_type = STDOUT;
 	else if (strcasecmp(t, "TCP_SOCK") == 0) {
-	    iop->desc_type = TCP_SOCK;
+	    iop->io_type = TCP_SOCK;
 	} else if (strcasecmp(t, "UDP_SOCK") == 0) {
-	    iop->desc_type = UDP_SOCK;
+	    iop->io_type = UDP_SOCK;
 	} else if (strcasecmp(t, "UNIX_SOCK") == 0) {
-	    iop->desc_type = UNIX_SOCK;
+	    iop->io_type = UNIX_SOCK;
 	} else if (strcasecmp(t, "SSH") == 0) {
-	    iop->desc_type = SSH;
+	    iop->io_type = SSH;
 	} else {
 	    log_msg("unknown type: %s\n", t);
 	    err = -1;

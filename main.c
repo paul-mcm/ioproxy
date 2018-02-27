@@ -89,7 +89,7 @@ void iop_setup(struct io_cfg *iocfg)
 	pthread_mutexattr_t	mxattrs;
 	int			r;
 
-	if (iocfg->io_type == TYPE_1 || iocfg->io_type == TYPE_2) {
+	if (iocfg->cfg_type == TYPE_1 || iocfg->cfg_type == TYPE_2) {
 
 	    /* AT THIS STAGE, iop0_paths HAS ONLY 1 MEMBER */
 	    iop0 = LIST_FIRST(&iocfg->iop0_paths);
@@ -98,7 +98,7 @@ void iop_setup(struct io_cfg *iocfg)
 	    pthread_cond_init(&iop->readable, NULL);
 	    iop0->iop->listlock = PTHREAD_MUTEX_INITIALIZER;
 
-	    iop0->iop->rbuf_p = new_rbuf(iocfg->io_type, iop->buf_sz);
+	    iop0->iop->rbuf_p = new_rbuf(iocfg->cfg_type, iop->buf_sz);
 	    iop0->iop->w_ptr = iop0->iop->rbuf_p;
 	    iop0->iop->r_ptr = iop0->iop->rbuf_p;
 	    iop0->iop->listready = malloc(sizeof(int));
@@ -117,7 +117,7 @@ void iop_setup(struct io_cfg *iocfg)
 		iop1->iop->io_drn 	= DST;
 	    }
 
-	} else if (iocfg->io_type == TYPE_3) {
+	} else if (iocfg->cfg_type == TYPE_3) {
 	    int i = 0;
 	    /* AT THIS POINT, ONLY ONE ITEM IN LIST */
 	    iop0 = LIST_FIRST(&iocfg->iop0_paths); 
@@ -142,7 +142,7 @@ void iop_setup(struct io_cfg *iocfg)
 		newiop0->iop->listready = malloc(sizeof(int));
 		*newiop0->iop->listready = 0;
 
-		newiop0->iop->rbuf_p = new_rbuf(iocfg->io_type, newiop0->iop->buf_sz);
+		newiop0->iop->rbuf_p = new_rbuf(iocfg->cfg_type, newiop0->iop->buf_sz);
 		newiop0->iop->w_ptr = newiop0->iop->rbuf_p;
 		newiop0->iop->r_ptr = newiop0->iop->rbuf_p;
 
@@ -351,7 +351,7 @@ void *io_thread(void *arg)
 
 		if (SIGTERM_STAT == TRUE) {
 		    log_msg("SIGTERM_STAT is TRUE\n");
-		    if (iop->desc_type == UNIX_SOCK && unlink(iop->path) != 0)
+		    if (iop->io_type == UNIX_SOCK && unlink(iop->path) != 0)
 			log_ret("unlinkk error: %s %s\n", iop->path, errno);
 		    break;
 		}
@@ -401,17 +401,17 @@ int validate_path(struct io_params *iop)
 
 int validate_ftype(struct io_params *iop, struct stat *s)
 {
-	if ((iop->desc_type == REG_FILE) && (!S_ISREG(s->st_mode))) {
+	if ((iop->io_type == REG_FILE) && (!S_ISREG(s->st_mode))) {
 		log_msg("CONFIG ERR: %s is not a regular file\n", iop->path);
 		return -1;
 	}
 
-	if ((iop->desc_type == FIFO) && (!S_ISFIFO(s->st_mode))) {
+	if ((iop->io_type == FIFO) && (!S_ISFIFO(s->st_mode))) {
 		log_msg("%s is not a FIFO\n", iop->path);
 		return -1;
 	}
 
-	if ((iop->desc_type == UNIX_SOCK) && (!S_ISSOCK(s->st_mode))) {
+	if ((iop->io_type == UNIX_SOCK) && (!S_ISSOCK(s->st_mode))) {
 		log_msg("%s is not a UNIX socket\n", iop->path);
 		return -1;
 	}
