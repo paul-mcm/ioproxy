@@ -75,7 +75,7 @@ int fill(char *f, char *v, struct io_params *iop)
 
 	printf("%s %s\n", f, v);
 
-	if ( strcasecmp(f, "type") == 0 ) {
+	if ( strcasecmp(f, "iotype") == 0 ) {
 	    /* XXX DOESN'T CHECK FOR ERROR */
 	    if (set_desc_t(v, iop) != 0) {
 		log_die("Error setting type\n");
