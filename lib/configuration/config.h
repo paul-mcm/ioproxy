@@ -79,7 +79,6 @@ struct sock_param {
         T_SOCK		conn_type;
         T_SOCKIO	sockio;
 	int		tls;
-	int		ssh;
         char		*ip;
 	int		listenfd;
         char	     	*tls_port;
