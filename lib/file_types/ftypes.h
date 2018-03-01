@@ -45,6 +45,7 @@ int open_desc(struct io_params *);
 int open_fifo(struct io_params *);
 int open_file(struct io_params *);
 int open_sock(struct io_params *);
+int open_pipe(struct io_params *);
 
 int set_flags(struct io_params *);
 

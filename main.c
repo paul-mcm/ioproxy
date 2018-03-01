@@ -37,10 +37,13 @@ int main(int argc, char *argv[])
 
 	sigemptyset(&sig_set);
         sigaddset(&sig_set, SIGTERM);
-        sigaddset(&sig_set, SIGHUP);	
-	sigprocmask(SIG_BLOCK, &sig_set, NULL);
+	if (pthread_sigmask(SIG_BLOCK, &sig_set, NULL) != 0)
+	    log_die("pthread_sigmask() error\n");
 
 	if (signal(SIGPIPE, SIG_IGN) == SIG_ERR)
+            log_syserr("Failed to ignore SIGPIPE:", errno);
+
+	if (signal(SIGCHLD, SIG_IGN) == SIG_ERR)
             log_syserr("Failed to ignore SIGPIPE:", errno);
 
 	SIGTERM_STAT = FALSE;
@@ -307,7 +310,6 @@ void *io_thread(void *arg)
 	sop = iop->sock_data;
 
 	set_thrd_sigmask(&sig_set);
-	pthread_cleanup_push(release_mtx, iop);
 
 	for (;;) {
 	    if (iop->io_fd < 0) {
@@ -317,15 +319,18 @@ void *io_thread(void *arg)
 		    log_msg("opening dscrptr for %s\n", iop->path);
 		}
 
-		if ((iop->io_fd = open_desc(iop)) < 0) {
-		    if (iop->io_fd == -2) { /* NON RECOVERABLE ERROR */
+		if ((r = open_desc(iop)) < 0) {
+		    if (r == -2) { /* NON RECOVERABLE ERROR */
 			break;
 		    } else {
 			log_msg("open error. Sleeping...\n");
 			sleep(10);
 			continue;
 		    }
+		} else if (r != 0) {
+		    iop->io_fd = r;
 		}
+
 		/* BLOCK */
 		if (is_src(iop)) {
 		    if (use_tls(iop)) {
@@ -344,6 +349,9 @@ void *io_thread(void *arg)
 		}
 
 		/* ONLY HERE IF DESCRIPTOR CLOSED */
+		if (r == -2)
+		    break;
+
 	 	if (is_netsock(iop)) {
 		    close(iop->io_fd);
 		    iop->io_fd = -1;
@@ -351,15 +359,25 @@ void *io_thread(void *arg)
 
 		if (SIGTERM_STAT == TRUE) {
 		    log_msg("SIGTERM_STAT is TRUE\n");
-		    if (iop->io_type == UNIX_SOCK && unlink(iop->path) != 0)
-			log_ret("unlinkk error: %s %s\n", iop->path, errno);
 		    break;
 		}
 	    }
 	}
+
+	if (is_netsock(iop)) {
+	    close(iop->io_fd);
+	    iop->io_fd = -1;
+	}
+
+	if (iop->io_type == PIPE) {
+	    close(iop->io_fd);
+	}
+
+	if (iop->io_type == UNIX_SOCK && unlink(iop->path) != 0)
+	    log_ret("unlinkk error: %s %s\n", iop->path, errno);
+
 	log_msg("io_thread returning for %s\n", iop->path);
 	pthread_exit((void *)0);
-	pthread_cleanup_pop(0);
 }
 
 void release_mtx(void *arg)

@@ -73,6 +73,8 @@ int fill(char *f, char *v, struct io_params *iop)
 	vlen = strlen(v);
 	sop = iop->sock_data;
 
+	printf("%s %s\n", f, v);
+
 	if ( strcasecmp(f, "type") == 0 ) {
 	    /* XXX DOESN'T CHECK FOR ERROR */
 	    if (set_desc_t(v, iop) != 0) {
@@ -135,9 +137,12 @@ int fill(char *f, char *v, struct io_params *iop)
 	} else if (strcasecmp(f, "srvr_key") == 0) {
 		sop->srvr_key = malloc(vlen + 1);
 		strlcpy(sop->srvr_key, v, vlen + 1);
-	} else if (strcasecmp(f, "cmd") == 0) {
+	} else if (strcasecmp(f, "ssh_cmd") == 0) {
 		sop->ssh_cmd = malloc(vlen + 1);
 		strlcpy(sop->ssh_cmd, v, vlen + 1);
+	} else if (strcasecmp(f, "pipe_cmd") == 0) {
+		iop->pipe_cmd = malloc(vlen + 1);
+		strlcpy(iop->pipe_cmd, v, vlen + 1);
 	} else if (strcasecmp(f, "reqcrt") == 0) {
 		if (strcasecmp(v, "true") == 0)
 		    sop->cert_vrfy = TRUE;
@@ -223,6 +228,8 @@ int set_desc_t(char *t, struct io_params *iop)
 	    iop->io_type = UNIX_SOCK;
 	} else if (strcasecmp(t, "SSH") == 0) {
 	    iop->io_type = SSH;
+	} else if (strcasecmp(t, "PIPE") == 0) {
+	    iop->io_type = PIPE;
 	} else {
 	    log_msg("unknown type: %s\n", t);
 	    err = -1;

@@ -97,7 +97,6 @@ int rbuf_ssh_writeto(struct io_params *iop)
 		    w_ptr = w_ptr->next;
 		    continue;
 		} else {
-		    printf("returned 0\n");
 		    sleep(2);
 		    continue;
 		}
@@ -141,8 +140,8 @@ int rbuf_tls_writeto(struct io_params *iop)
 		    w_ptr = w_ptr->next;
 		    continue;
 		} else {
-		    if (do_rderr(iop, w_ptr) < 0)
-			return -1;
+		    if ((r = do_rderr(iop, w_ptr)) < 0)
+			return r;
 		}
 	    }
 	} else {
@@ -154,8 +153,8 @@ int rbuf_tls_writeto(struct io_params *iop)
 		    w_ptr = w_ptr->next;
 		    continue;
 		} else {
-		    if (do_rderr(iop, w_ptr) < 0)
-			return -1;
+		    if ((r = do_rderr(iop, w_ptr)) < 0)
+			return r;
 		}
 	    }
 	}
@@ -188,8 +187,8 @@ int rbuf_tls_readfrom(struct io_params *iop)
 			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
 			continue;
 		    } else if (nw <= 0) {
-			if (do_wrerr(iop, r_ptr) < 0)
-			    return -1;
+			if ((r = do_wrerr(iop, r_ptr)) < 0)
+			    return r;
 		    }
 		}
 	    }
@@ -209,8 +208,8 @@ int rbuf_tls_readfrom(struct io_params *iop)
 			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
 			continue;
 		    } else if (nw <= 0) {
-			if (do_wrerr(iop, r_ptr) < 0)
-			    return -1;
+			if ((r = do_wrerr(iop, r_ptr)) < 0)
+			    return r;
 		    }
 		}
 	    }
@@ -239,8 +238,8 @@ int rbuf_writeto(struct io_params *iop)
 		    w_ptr = w_ptr->next;
 		    continue;
 		} else {
-		    if (do_rderr(iop, w_ptr) < 0) {
-			return -1;
+		    if ((r = do_rderr(iop, w_ptr)) < 0) {
+			return r;
 		    }
 		}
 	    }
@@ -253,8 +252,8 @@ int rbuf_writeto(struct io_params *iop)
 		    w_ptr = w_ptr->next;
 		    continue;
 		} else {
-		    if (do_rderr(iop, w_ptr) < 0)
-			return -1;
+		    if ((r = do_rderr(iop, w_ptr)) < 0)
+			return r;
 		}
 	    }
 	}
@@ -285,8 +284,8 @@ int rbuf_readfrom(struct io_params *iop)
 			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
 			continue;
 		    } else if (nw <= 0) {
-			if (do_wrerr(iop, r_ptr) < 0)
-			    return -1;
+			if ((r = do_wrerr(iop, r_ptr)) < 0)
+			    return r;
 		    }
 		}
 	    }
@@ -306,8 +305,8 @@ int rbuf_readfrom(struct io_params *iop)
 			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
 			continue;
 		    } else if (nw <= 0) {
-			if (do_wrerr(iop, r_ptr) < 0)
-			    return -1;
+			if ((r = do_wrerr(iop, r_ptr)) < 0)
+			    return r;
 		    }
 		}
 	    }
@@ -345,8 +344,8 @@ int rbuf_t3_tlsreadfrom(struct io_params *iop)
 		    continue;
 		} else if (nw <= 0) {
 		    MTX_UNLOCK(&iop->fd_lock);
-		    if (do_wrerr(iop, r_ptr) < 0) {
-			return -1;
+		    if ((r = do_wrerr(iop, r_ptr)) < 0) {
+			return r;
 		    } else {
 			MTX_LOCK(&iop->fd_lock);
 			continue;
@@ -385,8 +384,8 @@ int rbuf_t3_readfrom(struct io_params *iop)
 		    continue;
 		} else if (nw <= 0) {
 		    MTX_UNLOCK(&iop->fd_lock);
-		    if (do_wrerr(iop, r_ptr) < 0) {
-			return -1;
+		    if ((r = do_wrerr(iop, r_ptr)) < 0) {
+			return r;
 		    } else {
 			MTX_LOCK(&iop->fd_lock);
 			continue;
@@ -457,25 +456,26 @@ int io_error(struct io_params *iop, int e, int n)
 
 	sop = iop->sock_data;
 
-	if (sop->tls == TRUE) {
+	if (is_netsock(iop) && sop->tls == TRUE) {
 	    if (n == TLS_WANT_POLLIN || \
 		n == TLS_WANT_POLLOUT) {
-		    return 1;
+		    return -1;
 	    }
 	} else if (is_netsock(iop) && e == EPIPE) {
 	    return -1;
-	} else if (e == EPIPE	|| \
-	    e == ENETDOWN 	|| \
-	    e == EDESTADDRREQ 	|| \
-	    e == ENOTCONN) {
-		log_ret("io error - remote end closed for %d: %d: %s", \
-		    iop->io_fd, e, iop->path);
-		return 0;
+	} else if ( e == ENETDOWN 	|| \
+		    e == EDESTADDRREQ 	|| \
+		    e == ENOTCONN) {
+	    log_ret("io error - remote end closed for %d: %d: %s", \
+		iop->io_fd, e, iop->path);
+	    return 0;
 	} else if (errno == EAGAIN || errno == EINTR) {
-	    return 1;
+	    return -1;
+	} else if (errno == EPIPE) {
+	    return -2;
 	} else {
 	    log_ret("unknown io error %d %s", e, iop->path);
-	    return 2;
+	    return -2;
 	}
 }
 
@@ -508,6 +508,9 @@ int do_rderr(struct io_params *iop, struct rbuf_entry *rb)
 	if (rb->len == 0 && iop->io_type == TCP_SOCK) {
 	    do_close(iop, rb);
 	    return -1;
+	} else if (rb->len == 0 && iop->io_type == PIPE) {
+	    do_close(iop, rb);
+	    return -2;
 	} else if (rb->len == 0) {
 	    sleep(3);
 	    return 0;
@@ -516,11 +519,11 @@ int do_rderr(struct io_params *iop, struct rbuf_entry *rb)
 	if ((r = io_error(iop, errno, rb->len)) == 0) {
 	    sleep(3); /* XXX BETTER TO CALL select() HERE? */
 	    return 0;
-	} else if (r == 1) {
+	} else if (r == -1) {
 	    return 0;
 	} else {
 	    do_close(iop, rb);
-	    return -1;
+	    return r;
 	}
 }
 
@@ -541,7 +544,8 @@ int do_wrerr(struct io_params *iop, struct rbuf_entry *rb)
 	    return 0;
 	} else
 	    /* LOG SOMETHING? */
-	    return -1;
+	    do_close(iop, rb);
+	    return r;
 }
 
 void sleep_unlocked(struct io_params *iop, int n, struct rbuf_entry *rb)
@@ -579,12 +583,13 @@ void do_close(struct io_params *iop, struct rbuf_entry *rb)
 	    tls_free(sop->tls_ctx);
 	}
 
+	/* SAVE LOCATION OF RBUF PTRS */
 	if (is_src(iop))
 	    iop->w_ptr = rb;
 	else
 	    iop->r_ptr = rb;
 
-	if (is_dst(iop))
+	if (is_dst(iop) || (is_src(iop) && iop->io_type == PIPE))
 	    UNLOCK(iop, rb);
 
 	report_close_error(iop);
@@ -616,6 +621,8 @@ void report_close_error(struct io_params *iop)
 	    }
 	} else if (iop->io_type == UNIX_SOCK) {
 	    log_msg("Lost connection to unix sock %s\n", iop->path);
+	} else if (iop->io_type == PIPE) {
+	    log_msg("Process close: %s\n", iop->pipe_cmd);
 	} else {
 	    log_msg("Descriptor closed for %s\n", iop->path);
 	}

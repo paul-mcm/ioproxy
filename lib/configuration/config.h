@@ -61,7 +61,8 @@ typedef enum {
 	UNIX_SOCK,
 	TCP_SOCK,
 	UDP_SOCK,
-	SSH
+	PIPE,
+	SSH,
 } T_IO;
 
 typedef enum {
@@ -119,6 +120,8 @@ struct io_params {
 	int			io_fd;
 	int			*iofd_p;	/* TYPE 3 ONLY */
         char			*path;
+	char			*pipe_cmd;
+	pid_t			pipe_cmd_pid;
 	int			nonblock;
 	int			*listready;	/* s */
 	unsigned long		bytes;

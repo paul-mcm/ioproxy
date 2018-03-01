@@ -46,7 +46,6 @@ void log_syserr(const char *fmt, ...)
 }
 
 /* LOG MISC MSG ERROR AND RETURN */
-
 void log_msg(const char *fmt, ...)
 {
 	va_list		ap;

@@ -17,7 +17,7 @@
 #include "parse_line.h"
 
 const char *tr_fls[] = { "FALSE", "TRUE" };
-const char *io_types[] = { "REG_FILE", "FIFO", "STDOUT", "STDIN", "UNIX_SOCK", "TCP_SOCK", "UDP_SOCK", "SSH"};
+const char *io_types[] = { "REG_FILE", "FIFO", "STDOUT", "STDIN", "UNIX_SOCK", "TCP_SOCK", "UDP_SOCK", "PIPE", "SSH"};
 const char *io_drn[] = { "SRC", "DST" };
 const char *cfg_types[] = {"TYPE_1", "TYPE_2", "TYPE_3"};
 const char *conn_type[] = { "CLIENT", "SRVR" };
@@ -156,7 +156,7 @@ struct iop0_params * parse_iop0_stanza(FILE *f)
 		p = clean_line(ln);
 		/* '(' character signals end of stanza */
                 if (strncmp(p, "(", 1) == 0) {
-                        fseek(f, -(strlen(ln) - 1), SEEK_CUR);
+                        fseek(f, -(strlen(ln)), SEEK_CUR);
                         break;
                 }
 
@@ -306,6 +306,9 @@ void print_config_params(struct io_params *iop)
 	printf("io_fd ptr: %p\n", iop->io_fd);
 	printf("fd_lock ptr: %p\n", iop->fd_lock);
 	printf("buf_sz: %d\n", iop->buf_sz);
+
+	if (iop->pipe_cmd != NULL)
+	    printf("pipe_cmd:\t\t%s\n", iop->pipe_cmd);
 
 /*	printf("readable addr: %p\n", iop->readable);
 *	printf("listlock addr: %p\n", iop->listlock);

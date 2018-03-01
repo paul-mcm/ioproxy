@@ -15,6 +15,7 @@
 
 #include <sys/stat.h>
 
+#include <libgen.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stddef.h>
@@ -30,9 +31,12 @@
 #define SA struct sockaddr
 #define LISTENQ 1
 
+void *child_thread(void *arg);
+
 int open_desc(struct io_params *iop)
 {
-	int fd;
+	pthread_attr_t	dflt_attrs;
+	int		fd, r;
 
 	fd = -1;
 
@@ -51,6 +55,8 @@ int open_desc(struct io_params *iop)
 		fd = open_sshsession(iop);
 	    } else if (is_netsock(iop)) {
 		fd = open_sock(iop);
+	    } else if (iop->io_type == PIPE) {
+		fd = open_pipe(iop);
 	    } else {
 		log_msg("Unknown type %d", iop->io_type);
 		return -1;
@@ -63,6 +69,75 @@ int open_desc(struct io_params *iop)
 		break;
 	}
 	return fd;
+}
+
+int open_pipe(struct io_params *iop)
+{
+	int		r;
+	pid_t		pid;
+	char		*args[512];
+	char		*ptr;
+	char		*cmd_ptr;
+	int		cnt;
+	int		i;
+	int		fds[2];
+	int		pstat;
+
+        cnt = 0;
+
+	if (pipe(fds) != 0) {
+	    log_syserr("pipe() failed: ");
+	}
+
+	cmd_ptr = malloc(strlen(iop->pipe_cmd) + 1);
+	strlcpy(cmd_ptr, iop->pipe_cmd, strlen(iop->pipe_cmd) + 1);
+
+        while ((ptr = strsep(&cmd_ptr, " ")) != NULL) {
+            if (ptr == '\0')
+                continue;
+            args[cnt] = malloc(strlen(ptr) + 1);
+            strlcpy(args[cnt], ptr, strlen(ptr) + 1);
+            cnt++;
+        }
+
+        args[cnt] = '\0';
+	cmd_ptr = args[0];
+	args[0] = basename(args[0]);
+
+        for (i = 0; i < cnt; i++) {
+            printf("CMD: %s %s\n", args[i], cmd_ptr);
+	}
+        if ((iop->pipe_cmd_pid = fork()) == 0) {
+	    /* CHILD */
+	    if (is_src(iop)) {
+		close(fds[0]);
+		if (dup2(fds[1], STDOUT_FILENO) != STDOUT_FILENO)
+		    /* MAY NOT BE ASYNC-SAFE ON ALL SYSTEMS */
+		    log_syserr("dup2() failed: ");
+	    } else {
+		close(fds[1]);
+		if (dup2(fds[0], STDIN_FILENO) != STDIN_FILENO)
+		    log_syserr("dup2() failed: ");
+	    }
+
+            if (execve(cmd_ptr, args, NULL) == -1) {
+		free(cmd_ptr);
+		close(fds[0]);
+		close(fds[1]);
+		log_syserr("execve() error: %s\n", strerror(errno));
+	    }
+        } else {
+	    /* PARENT */
+	    free(cmd_ptr);
+	    if (is_src(iop)) {
+		close(fds[1]);
+		iop->io_fd = fds[0];
+	    } else {
+		close(fds[0]);
+		iop->io_fd = fds[1];
+	    }
+	}
+	return 0;
 }
 
 int open_sshsession(struct io_params *iop)
@@ -97,7 +172,7 @@ int open_sshsession(struct io_params *iop)
         }
 
 	if ((r = ssh_userauth_publickey_auto(sop->ssh_s, NULL, NULL)) == SSH_AUTH_SUCCESS) {
-            printf("Success\n");
+            printf("SSH auth success\n");
         } else if (r == SSH_AUTH_ERROR) {
             printf("Serious error happened\n");
 	    return -2;
@@ -148,11 +223,9 @@ int open_fifo(struct io_params *iop)
 	}
 
 	oflags |= O_NONBLOCK;
-	printf("CALLED open_fifo()1\n");
 
 	for (;;) {
 	    if ((fd = open(iop->path, oflags)) < 0) {
-		printf("CALLED open_fifo()2\n");
 		if (errno == ENXIO) {
 		    log_msg("Destination %s FIFO not writable without reader", iop->path);
 		    sleep(5);
