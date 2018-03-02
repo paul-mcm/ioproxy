@@ -452,9 +452,17 @@ void free_rbuf(struct rbuf_entry *rbuf)
 
 int io_error(struct io_params *iop, int e, int n)
 {
-	struct sock_param	*sop;
+	/* RETURN VALS:
+	 *  0  no eror - call epoll/kqueue
+	 * -1 transient error; call read/write again
+	 * -2 permanent error; close descriptor; exit thread
+         */
 
+	struct sock_param	*sop;
 	sop = iop->sock_data;
+
+	if (n == 0) /* zero bytes read/written */
+	    return 0;
 
 	if (is_netsock(iop) && sop->tls == TRUE) {
 	    if (n == TLS_WANT_POLLIN || \
@@ -505,23 +513,20 @@ int do_rderr(struct io_params *iop, struct rbuf_entry *rb)
 {
 	int	r;
 
-	if (rb->len == 0 && iop->io_type == TCP_SOCK) {
+	if (rb->len == 0 && iop->io_type == TCP_SOCK) { /* SOCKET CLOSED */
 	    do_close(iop, rb);
 	    return -1;
-	} else if (rb->len == 0 && iop->io_type == PIPE) {
+	} else if (rb->len == 0 && iop->io_type == PIPE) { /* NO WRITER? */
 	    do_close(iop, rb);
 	    return -2;
-	} else if (rb->len == 0) {
-	    sleep(3);
-	    return 0;
 	}
 
 	if ((r = io_error(iop, errno, rb->len)) == 0) {
-	    sleep(3); /* XXX BETTER TO CALL select() HERE? */
+	    sleep(3); /* CALL epoll/kqueue HERE */
 	    return 0;
 	} else if (r == -1) {
 	    return 0;
-	} else {
+	} else if (r == -2) {
 	    do_close(iop, rb);
 	    return r;
 	}
