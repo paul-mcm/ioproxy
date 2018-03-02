@@ -164,7 +164,7 @@ int use_tls(struct io_params *);
 int use_ssh(struct io_params *);
 void report_close_error(struct io_params *);
 
-int valid_path(char *, struct stat *);  /* VALIDATE PATH */
+int validate_path(char *);  /* VALIDATE PATH */
 int valid_ftype(int, struct stat *); /* VALIDATE FILE TYPE */
 
 void print_config_params(struct io_params *);

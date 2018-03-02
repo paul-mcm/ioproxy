@@ -355,14 +355,16 @@ void print_config_params(struct io_params *iop)
 
 }
 
-int valid_path(char *p, struct stat *s) 
+int validate_path(char *path) 
 {
-        int error = 0;
+	struct stat     s;
 
-        if (stat(p, s) != 0)
-                error = -1; 
-
-        return error;
+        if (stat(path, &s) != 0) {
+            printf("Error for file %s: %s\n", path, strerror(errno));
+            return -1;
+        } else {
+            return 0;
+        }
 }
 
 int valid_ftype(int n, struct stat *s)

@@ -43,7 +43,6 @@ void * iocfg_manager(void *);
 void * io_thread(void *);
 void * io_t3_thread(void *);
 
-int validate_path(struct io_params *);
 int validate_ftype(struct io_params *, struct stat *);
 void ioparam_list_kill(struct io_cfg *);
 int cancel_ioparam(struct io_params *);

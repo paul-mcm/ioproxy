@@ -38,13 +38,20 @@ int main(int argc, char *argv[])
 	    switch (ch) {
 	    case 'f':
 		config_file = optarg;
-	    case 'F':
+	    case 'H':
 		host_file = optarg;
+		if (validate_path(host_file) != 0)
+		    log_die("Host file path invalid\n");
+	    case '?':
+		log_die("Exiting\n");
            }
 	}
 
 	argc -= optind;
 	argv += optind;
+
+	if (validate_path(config_file) != 0)
+	    log_die("Config file path invalid\n");
 
 	if (tls_init() < 0)
 	    log_die("tls_init() error\n");
@@ -416,19 +423,6 @@ void release_mtx(void *arg)
 		log_msg("unlock error: %d\n", r);
 
 	log_msg("release_mtx() returning ro %s\n", iop->path);
-}
-
-int validate_path(struct io_params *iop)
-{
-	struct stat sb;
-
-	if (valid_path(iop->path, &sb) != 0)
-		return 0;
-
-	if (validate_ftype(iop, &sb) != 0) {
-		log_msg("CONFIG ERR: Incorrect file type for %s\n", iop->path);
-		return 1;
-	}
 }
 
 int validate_ftype(struct io_params *iop, struct stat *s)
