@@ -23,14 +23,14 @@ const char *cfg_types[] = {"TYPE_1", "TYPE_2", "TYPE_3"};
 const char *conn_type[] = { "CLIENT", "SRVR" };
 const char *sockio[] = { "DGRAM", "STREAM" };
 
-int read_config(struct all_cfg_list *all)
+int read_config(struct all_cfg_list *all, char *cfg_file)
 {
         FILE *fp;
         char ln[SIZE];
         char *p;
 	struct io_cfg *iocfg;
 
-        if ((fp = fopen("./ioproxy.conf", "r")) == NULL)  {
+        if ((fp = fopen(cfg_file, "r")) == NULL)  {
 		log_syserr("fopen error: ");
 	}
 

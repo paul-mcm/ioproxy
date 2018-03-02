@@ -16,6 +16,7 @@
 #include "ioproxy.h"
 
 int debug = 1;
+char *config_file = "/etc/ioproxyd.conf";
 
 void *iocfg_manager(void *);
 void *io_thread(void *);
@@ -53,7 +54,7 @@ int main(int argc, char *argv[])
 	ssh_init();
 
 	LIST_INIT(&all_cfg);
-	read_config(&all_cfg);
+	read_config(&all_cfg, config_file);
 
 	/* ITERATE OVER EACH CFG IN all_cfg AND 
 	 * START CONTROL THREAD.

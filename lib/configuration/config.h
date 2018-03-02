@@ -148,7 +148,7 @@ struct io_cfg {
 LIST_HEAD(all_cfg_list, io_cfg) all_cfg, *all_cfgs;
 
 struct io_cfg * parse_config(FILE *);
-int read_config(struct all_cfg_list *);
+int read_config(struct all_cfg_list *, char *);
 int init_cfg(struct io_cfg *);
 int show_config(struct io_cfg *);
 int show_all_configs(struct all_cfg_list *);
