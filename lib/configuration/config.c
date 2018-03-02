@@ -346,10 +346,10 @@ void print_config_params(struct io_params *iop)
 
 		    printf("\tcert_vrfy: %s\n", tr_fls[sop->cert_vrfy]);
 
-		    if (sop->srvr_cert != NULL)
-			printf("\tsrvr_cert: %s\n", sop->srvr_cert);
-		    if (sop->srvr_key != NULL)
-			printf("\tsrvr_key: %s\n", sop->srvr_key);
+		    if (sop->host_cert != NULL)
+			printf("\thost_cert: %s\n", sop->host_cert);
+		    if (sop->host_key != NULL)
+			printf("\thost_key: %s\n", sop->host_key);
 		}
 	}
 
@@ -601,10 +601,10 @@ void validate_sockparams(struct io_params *iop)
 	    if (sop->conn_type == CLIENT && sop->cacert_path == NULL && sop->cacert_dirpath == NULL)
 		log_die("TLS requires a CA cert path CA cert directory\n");
 
-	    if (sop->conn_type == SRVR && sop->srvr_cert == NULL)
+	    if (sop->conn_type == SRVR && sop->host_cert == NULL)
 		log_die("Server TLS requires filenames for server's certificate\n");
 
-	    if (sop->conn_type == SRVR && sop->srvr_key == NULL)
+	    if (sop->conn_type == SRVR && sop->host_key == NULL)
 		log_die("Server TLS requires filenames for server's private key\n");
 
 	    if (iop->io_type == UDP_SOCK && sop->tls == TRUE)

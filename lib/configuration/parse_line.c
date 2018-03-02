@@ -129,12 +129,12 @@ int fill(char *f, char *v, struct io_params *iop)
 	} else if (strcasecmp(f, "cacertdir") == 0) {
 		sop->cacert_dirpath = malloc(vlen + 1);
 		strncpy(sop->cacert_dirpath, v, vlen);
-	} else if (strcasecmp(f, "srvr_cert") == 0) {
-		sop->srvr_cert = malloc(vlen + 1);
-		strlcpy(sop->srvr_cert, v, vlen + 1);
-	} else if (strcasecmp(f, "srvr_key") == 0) {
-		sop->srvr_key = malloc(vlen + 1);
-		strlcpy(sop->srvr_key, v, vlen + 1);
+	} else if (strcasecmp(f, "host_cert") == 0) {
+		sop->host_cert = malloc(vlen + 1);
+		strlcpy(sop->host_cert, v, vlen + 1);
+	} else if (strcasecmp(f, "host_key") == 0) {
+		sop->host_key = malloc(vlen + 1);
+		strlcpy(sop->host_key, v, vlen + 1);
 	} else if (strcasecmp(f, "ssh_cmd") == 0) {
 		sop->ssh_cmd = malloc(vlen + 1);
 		strlcpy(sop->ssh_cmd, v, vlen + 1);

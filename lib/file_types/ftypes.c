@@ -389,7 +389,7 @@ int do_tlsaccept(struct io_params *iop)
 	if ((tls_cfg = tls_config_new()) == NULL)
             log_die("tls_config_new error\n");
 
-        tls_config_set_keypair_file(tls_cfg, sop->srvr_cert, sop->srvr_key);
+        tls_config_set_keypair_file(tls_cfg, sop->host_cert, sop->host_key);
 
 	if (sop->cacert_path != NULL || sop->cacert_dirpath != NULL) {
 	    config_cacert(sop, tls_cfg);

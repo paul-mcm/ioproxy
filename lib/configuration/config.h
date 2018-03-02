@@ -87,8 +87,8 @@ struct sock_param {
 	char		*sockpath;
 	char		*cacert_path;
 	char		*cacert_dirpath;
-	char		*srvr_cert;
-	char		*srvr_key;
+	char		*host_cert;
+	char		*host_key;
 	struct tls	*tls_ctx;	
 	int		cert_vrfy;
 	char		*ssh_cmd;
