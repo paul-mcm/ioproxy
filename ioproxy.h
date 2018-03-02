@@ -22,6 +22,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <libgen.h>
 #include <netdb.h>
 #include <pthread.h>
 #include <signal.h>
@@ -37,6 +38,10 @@
 #include "lib/configuration/config.h"
 #include "lib/buff_management/rbuf.h"
 #include "lib/file_types/ftypes.h"
+
+#define FALSE 0
+#define TRUE 1
+
 
 void terminate(void);
 void * iocfg_manager(void *);

@@ -15,7 +15,8 @@
 
 #include "ioproxy.h"
 
-int debug = 1;
+int	debug = TRUE;
+char	*prog;
 
 void *iocfg_manager(void *);
 void *io_thread(void *);
@@ -33,6 +34,17 @@ int main(int argc, char *argv[])
 	char 			*config_file = "/etc/ioproxyd.conf";
 	char			*host_file = '\0';
 	char			ch;
+	int daemonize;
+
+	prog = basename(argv[0]);
+
+	if (strcasecmp(prog, "ioproxyd") == 0) {
+	    printf("TRUE\n");
+	    daemonize = TRUE;
+	} else {
+	    printf("FALSE: %s\n", argv[0]);
+	    daemonize = FALSE;
+	}
 
 	while ((ch = getopt(argc, argv, "H:f:")) != -1) {
 	    switch (ch) {

@@ -1,8 +1,9 @@
 objects = rbuf.o config.o parse_line.o ftypes.o error.o
 
 all: $(objects)
-	@gcc -g -ltls -lssh_threads -I/usr/local/include -L/usr/local/lib -pthread -o ioproxy main.c $(objects) 
+	@gcc -g -ltls -lssh_threads -I/usr/local/include -L/usr/local/lib -pthread -o ioproxyd main.c $(objects) 
 	@rm -f $(objects)
+	@ln -s ./ioproxyd ./ioproxy
 
 rbuf.o: lib/buff_management/rbuf.h
 	@gcc -g -I/usr/local/include -pthread -c -o rbuf.o lib/buff_management/rbuf.c
@@ -20,5 +21,5 @@ error.o: lib/error/errorlog.h
 	@gcc -g -c -o error.o lib/error/errorlog.c
 
 clean: 
-	@rm -f $(objects) main
+	@rm -f $(objects) ioproxyd ioproxy
 
