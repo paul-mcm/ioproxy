@@ -2,9 +2,13 @@
 <head>
 <style>
 p {width:50%;}
+table {table-layout: fixed;}
+td {word-wrap:break-word}
 </style>
 </head>
 <body style="background-color: WHITE">
+
+
 
 <h2>ioproxy</h2>
 <h4>proxy, multiplex/duplicate data streams across files/sockets of any type.</h4>
@@ -270,8 +274,8 @@ File will be created if it does not already exists.  If file is a
 <b>destination</b>, writes will append to file; if a <b>source</b> the
 file is read indefinitely (e.g., as in `tail -f`)
 </p>
-<p>
 <h3>FIFO</h3>
+<p>
 A FIFO on the local filesystem.<br>
 Required Vars:<br>
 <ol>
@@ -282,9 +286,8 @@ Optional Vars: (none)<br>
 Will be created if doesn't already exist.  Uses non-blocking I/O by
 default
 </p>
-<p>
 <h3>PIPE</h3>
-
+<p>
 A local process spawned by ioproxy.  I/O is read from STDOUT or
 written to STDIN of new process.<br>
 
@@ -294,9 +297,9 @@ Required Vars:<br>
 </ol>
 Optional Vars: (none)<br>
 </p>
-<p>
 <h3>SSH</h3>
-A command run on a remote host using SSH protocol.  Data is read from new proc's STDOUT.<br>
+<p>
+A command run on a remote host using SSH protocol.  Data is read from new proc's STDOUT.  Requires use to have log-in credentials on remote host.
 Required Vars:<br>
 <ol>
 <li><b>ssh_cmd</b>  - command to exec on remote host; no enclosing quotes
@@ -307,8 +310,8 @@ Required Vars:<br>
 <br>
 Optional Vars: (none)<br>
 </p>
-<p>
 <h3>UNIX_SOCK</h3>
+<p>
 A local, unix socket.
 Required Vars:
 </p>
@@ -329,8 +332,8 @@ will return an error if filesystem entry for socket<br> already
 exists.
 
 </p>
-<p>
 <h3>UDP_SOCK</h3>
+<p>
 A UDP socket.<br>
 Required Vars:<br>
 <ol>
@@ -349,8 +352,8 @@ for 'ip' will be used.)</i>
 <br>
 Optional Vars: (none)<br>
 </p>
-<p>
 <h3>TCP_SOCK</h3>
+<p>
 A TCP socket.<br>
 Required Vars:<br>
 <ol>
@@ -397,87 +400,42 @@ clients to validate their identity.
 
 
 </p>
-<p>
 
-
-<pre>
-iotype		associated vars (* = required)
------------------------------------------------
-STDOUT		- (none)
-STDIN		- (none)
-FILE		- path*
-FIFO		- path*
-PIPE		- pipe_cmd*
-SSH		- ssh_cmd*, host* or ip*
-UNIX_SOCK	- sockpath*, conn*, sockproto
-UDP_SOCK	- host* or ip*, conn*, port*, sockproto
-TCP_SOCK 	- host* or ip*, conn*, port*, tls, cacert, cacertdir, reqcrt, our_cert, our_key
-</pre>
-
-<pre>
-Var Name	  Allowable values + 
--------------------------------------
-iotype*		- (FILE, FIFO, UNIX_SOCK, TCP_SOCK, UDP_SOCK, STDOUT, STDIN, PIPE, SSH) 
-dir		- src/dst - direction of io stream; source or destination
-nonblock	- true/false(f)
-bufsz		- buff size for rbuf entry
-
-path		- full path to filename (for regular files and FIFOs)
-
-Sockets/Networking
-host 		- hostname
-sockpath	- full path to unix socket
-ip		- ipv4 addr
-conn		- server/client 
-sockproto	- DGRAM/STREAM
-port		- port for network i/o
-
-
-tls		- (true/false)(f)
-cacert		- path to cacert
-cacertdir	- path to ca cert dir
-reqcrt		- true/false(t) - host verification policy for cert validation
-out_cert	- our cert
-our_key		- our key
-
-ssh_cmd		- remote command to exec over when using io type SSH.
-pipe_cmd	- command for iotype PIPE
-
-
-</pre>
+<h2>Tables of config options</h2>
+<h3>General Options</h3>
+<table border = 1, cellspacing = 4, cellpadding = 5>
+<tr><th>Var Name</th><th>Allowable values</th><th>Notes</th></tr>
+<tr><td><b>iotype</b></td><td>FILE, FIFO. UNIX_SOCK, TCP_SOCK,<br>UDP_SOCK, STDOUT, STDIN, PIPE, SSH</td><td>Required for all io streams</tr>
+<tr><td><b>dir</b> (direction)</td><td>SRC | DST</td><td>direction of io stream.  Data is read from sources, and written to destinations </td></tr>
+<tr><td><b>nonblock</b></td><td>TRUE | FALSE</td><td>Set I/O stream to non-blocking. Default: false</td></tr>
+<tr><td><b>bufsz</b></td><td>an integer</td><td>buff size for rbuf entry</td></tr>
+<tr><td><b>path</b></td><td>absolute path for regular files and FIFOs</td><td>FIFOs use non-blocking I/O by defaults</td></tr>
+<tr><td><b>ssh_cmd</b></td><td>command + args; no enclosing quotes</td><td>command to exec over when using io type SSH</td></tr>
+<tr><td><b>pipe_cmd</b></td><td>command + args; no enclosing quotes</td><td>for iotype PIPE</td></tr>
+</tr>
+</table>
+<h3>Socket/Networking options</h3>
+<table border = 1, cellspacing = 4, cellpadding = 5>
+<tr><th>Var Name</th><th>Allowable values</th><th>Notes</th></tr>
+<tr><td><b>host</b></td><td>hostname</td><td></td></tr>
+<tr><td><b>ip</b></td><td>ipv4 addr</td><td></td></tr>
+<tr><td><b>conn</b></td><td>SERVER | CLIENT</td><td></td></tr>
+<tr><td><b>port</b></td><td>port for network i/o</td><td></td></tr>
+<tr><td><b>sockpath</b></td><td>full path to unix socket</td><td></td></tr>
+<tr><td><b>sockproto</b></td><td>DGRAM | STREAM</td><td></td></tr>
+</tr>
+</table>
+<h2>TLS options</h2>
+<table border = 1, cellspacing = 4, cellpadding = 5>
+<tr><td><b>tls</b></td><td>TRUE | FALSE</td><td></td></tr>
+<tr><td><b>cacert</b></td><td>absolute path to CA certificate</td><td></td></tr>
+<tr><td><b>cacertdir</b></td><td>absolute path to CA certificate directory</td><td></td></tr>
+<tr><td><b>reqcrt</b></td><td>TRUE | FALSE</td><td>Host verification policy for cert validation</td></tr>
+<tr><td><b>host_cert</b></td><td>host's X509 certificate</td><td></td></tr>
+<tr><td><b>host_key</b></td><td>host's private key associated<br>with certificate/public key</td><td></td></tr>
 
 
 
-
-<pre>
-BASIC EXAMPLE OF DESCRIPTOR I/O USAGE
--------------------------------------
-1. Host A on an internal network needs log file data from Host B in
-   DMZ.
-
-2. Log daemon on Host B can write data locally to any file type, but
-   to send data to another host, it needs to connect to a server
-   (initiate outbound TCP connection)
-
-3. Networking rules prohibit Host B in DMZ from initiating outbound
-   TCP connections to any host on internal network.
-
-4. Networking rules allow Host A to initiate TCP connections to Host B
-   in the DMZ
-
-Solution:
-1. On Host B in DMZ, configure <i>ioproxy</i> to:
-   i. open the data source (which is wherever the log daemon is
-   configured to write data: file, unix socket, FIFO, etc.
-   ii. open listening TCP port that uses TLS and writes data from
-   source to authenticated clients.
-
-2. On Host A, configure <i>ioproxy</i> to:
-   i.  connect to Host B's TCP port and read incoming data
-   ii. write incoming data to file (or user terminal, FIFO,
-   etc)
-
-
-
-</pre>
+</tr>
+</table>
 
