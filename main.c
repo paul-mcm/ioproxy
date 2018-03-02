@@ -16,7 +16,6 @@
 #include "ioproxy.h"
 
 int debug = 1;
-char *config_file = "/etc/ioproxyd.conf";
 
 void *iocfg_manager(void *);
 void *io_thread(void *);
@@ -26,12 +25,26 @@ volatile sig_atomic_t SIGTERM_STAT;
 
 int main(int argc, char *argv[])
 {
-	int		r;
-	pthread_t	tid, sigterm_tid, sighup_tid;
-	struct io_cfg	*iocfg;
-	sigset_t	sig_set;
-	int		sig;
-	pthread_attr_t  dflt_attrs;
+	pthread_t		sigterm_tid, sighup_tid, tid;
+	pthread_attr_t		dflt_attrs;
+	struct io_cfg		*iocfg;
+	sigset_t		sig_set;
+	int			sig, r;
+	char 			*config_file = "/etc/ioproxyd.conf";
+	char			*host_file = '\0';
+	char			ch;
+
+	while ((ch = getopt(argc, argv, "H:f:")) != -1) {
+	    switch (ch) {
+	    case 'f':
+		config_file = optarg;
+	    case 'F':
+		host_file = optarg;
+           }
+	}
+
+	argc -= optind;
+	argv += optind;
 
 	if (tls_init() < 0)
 	    log_die("tls_init() error\n");
