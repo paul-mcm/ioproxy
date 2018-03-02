@@ -1,0 +1,483 @@
+<html>
+<head>
+<style>
+p {width:50%;}
+</style>
+</head>
+<body style="background-color: WHITE">
+
+<h2>ioproxy</h2>
+<h4>proxy, multiplex/duplicate data streams across files/sockets of any type.</h4>
+<p>
+<b><u>INTRO</b></u><br>
+
+<i>ioproxy</i> is a tool for connecting I/O streams between unrelated
+processes.  If a process produces output readable by another unrelated
+process, <i>ioproxy</i> can send that output to any other process, file, 
+socket (local or remote host), or user's terminal.
+</p>
+<p>
+In addition to connecting I/O streams of different types, <i>ioproxy</i> can
+multiplex several input streams into a single output stream or
+duplicate a single input stream to multiple output streams.
+</p>
+<p>
+
+For example, <i>ioproxy</i> can simultaneously 'tail -f' the same (or
+different) files on different hosts, writing the output to the user's
+terminal.
+
+</p>
+<p>
+<i>ioproxy</i> can read data from a file on a remote host and write
+that data to multiple files on any number of other remote hosts.
+</p>
+<p>
+<i>ioproxy</i> can also be used to overcome some kinds of restrictions on
+data transfer imposed by network firewall/filtering rules.
+</p>
+<p>
+
+<i>ioproxd</i> is the daemon for long term I/O tasks.  It takes a
+configuration file (default: ioproxyd.conf).  The companion program,
+<i>ioproxy</i> takes command line args and can be used for shorter,
+one-off tasks.
+
+</p>
+<b><u>DETAILS</u></b><br>
+<p>
+
+<i>ioproxy</i> works with data streams. A data stream is designated as
+either a <b>source</b>, from which data is read, or
+<b>destination</b>, to which data is written.  <b>Sources</b> and
+<b>destinations</b> of the I/O can be any of the following <b>I/O
+types</b>:
+</p>
+<pre>
+	1. TCP socket (server/client, with/without TLS)
+	2. UDP socket (server/client)
+	3. local, unix socket
+	4. regular file
+	5. FIFO
+	6. STDIN
+	7. STDOUT
+	8. PIPE (STDIN or STDOUT of locally exec'd process) 
+	9. SSH connection(source only*)
+</pre>
+<p>
+
+(* Nums. 1-8 correspond roughly to standard unix 'file types' capable
+of I/O.  Num. 9 is an authenticated ssh connection used for generating
+data with ssh command execution.);
+
+</p>
+<p>
+A basic configuration declares a <b>source</b> (e.g., I/O type FIFO) and a
+<b>destination</b> (e.g., regular file).  Any data written to the <b>source</b> is
+also written to the <b>destination</b>.
+</p>
+<p>
+
+It's possible to declare a single <b>source</b> with multiple <b>destinations</b>.
+In this case, data written to the <b>source</b> is copied to all
+<b>destinations</b> (which need not be of the same I/O type).
+
+
+</p>
+<p>
+
+The third possibility is a configuration that declares multiple
+<b>sources</b> and a single <b>destination</b>.  Data written to any <b>source</b> is
+copied to the <b>destination</b>. This kind of configuration has some unique
+constraints that should be understood before being used.
+
+</p>
+
+<h2>Configuring ioproxy</h2>
+<p>
+
+A minimal <b>configuration</b> consists of at least one data stream
+declared as a <b>source</b> and one data stream declared as a
+<b>destination</b>.
+</p>
+<p>
+There are three configuration types for io streams:
+</p>
+<p>
+<b>Type 1  (one-to-one)</b>:<br>
+One <b>source</b> with one <b>destination</b><br>
+<pre>
+ ------   (data)   --------   (data)
+| src  |--------->|ioproxy |---------> dest.
+ ------            -------- 
+</pre>
+</p>
+<p>
+
+<b>Type 2 (one-to-many)</b><br>
+One <b>source</b> with multiple <b>destinations</b><br>
+<pre>
+                    --------  (data)
+ ------   (data)   |ioproxy |---------> dest.
+| src  | --------->|        | (data)
+ ------            |        |---------> dest.
+                    --------
+</pre>
+</p>
+<p>
+
+
+<b>Type 3 (many-to-one)</b><br>
+Multiple <b>sources</b> and a one <b>destination</b><br>
+
+
+<pre>
+               --------
+      (data)  |ioproxy | 
+src --------->|        |  (data)
+      (data)  |        |---------> dest.
+src --------->|        |
+               -------- 
+</pre>
+
+<p>
+In each type, there is a single, <b>primary</b> data stream connected to one
+or more <b><b>secondary</b></b> data streams.
+</p>
+
+
+
+In a configuration, the following rules distinguish between <b>primary</b>
+and <b>secondary</b> data streams:
+</p>
+<ol>
+<li><b>primary</b> data stream appears first, before any <b>secondary</b> data streams.
+<li><b>primary</b> data stream includes the <b>dir</b> keyword/value to indicating direction of data stream (src/dst).
+<li>There is only a single <b>primary</b> data stream defined per config.
+<li>each <b>secondary</b> data stream appears after the <b>primary</b> and is contained within opening and closing parenthesis.
+<li>There may be any number of <b>secondary</b> data streams.
+</ol>
+<p>
+If the <b>primary</b> is declared as a <b>source</b>, then all <b>secondary</b> data streams are by default <b>destinations</b> and vice versa.
+</p>
+<p>
+The config file may hold multiple configurations.  Each configuration begins with an opening '{' and ends with a closing '}'
+</p>
+<p>
+An example configuration for a <b>type 1</b> config would be:
+<pre>
+{
+   iotype: FILE; dir: src; path: /var/log/messages; 
+  (iotype: FILE; path: /tmp/messages;)
+}
+</pre>
+Observations:
+<ol>
+<li>Data streams contain keyword/value pairs.
+<li>Each keyword value pair is terminated with a semi-colon.
+<li>Each keyword is followd by a colon and one or more spaces and a value;
+<li>Each data stream declares a value for <b>iotype</b>.
+<li>The keyword <b>iotype</b> is the first keyword used.
+<li>The keyword/value pair <b>dir: src;</b> defines the <b>primary</b><br>
+as a <b>source</b> data stream from which data will be read.
+<li>The <b>secondary</b> stream is defined after the <b>primary</b> and is<br>
+enclosed in parenthesis.
+</ol>
+A <b>type 2</b> config example:
+<pre>
+{
+  iotype: FILE; dir: src; path: /var/log/messages; 
+  (iotype: FILE; path: /tmp/messages;)
+  (iotype: PIPE; pipe_cmd: /usr/bin/data_parser;)
+}
+</pre>
+This type only differs from a <b>type 1</b> by the additional <b>secondary</b> data
+stream(s).
+</p>
+A <b>type 3</b> config example:
+<pre>
+{
+  iotype: STDOUT; dir: dst;
+  (iotype: SSH; host: host1; ssh_cmd: tail -f /var/log/authlog;)
+  (iotype: SSH; host: host2; ssh_cmd: tail -f /var/log/auth;)
+}
+</pre>
+<p>
+
+This configuration defines the <b>primary</b> stream as a
+<b>destination</b> to which data will be written.  In this case, the
+<b>destination</b> is ioproxy's STDOUT, which will be the user's
+terminal if exec'd from the user's shell. The <b>source</b> data comes
+from executing `tail -f' on two different files on two different
+hosts.
+
+</p>
+
+
+<h2>I/O TYPES</h2>
+<p>
+
+In the configuration, the <b>iotype</b> keyword identifies the I/O
+type. It is required for each data stream and must be the first
+keyword option specified.  Possible values are:
+<ol>
+<li><b>TCP_SOCK</b> - TCP socket
+<li><b>UDP_SOCK</b> - UDP socket
+<li><b>UNIX_SOCK</b> - local, unix socket
+<li><b>FILE</b> - a regular file
+<li><b>FIFO</b> - a FIFO
+<li><b>STDIN</b> - STDIN
+<li><b>STDOUT</b> - STDOUT
+<li><b>PIPE</b> - an IPC channel to the STDIN or STDOUT of locally exec'd process
+<li><b>SSH</b> - connection(source only*)
+</ol>
+<p>
+
+
+</p>
+<p>
+Different I/O types have different options available for
+configuration.  Some options are required, some not.  Some are common
+to all I/O types and some for only a specific I/O type.
+</p>
+<p>
+The following options are available to all I/O types:
+<ol>
+<li><b>bufsiz</b> - length (in bytes) of data buffer for reads/writes.<br>
+This sets the maximum size of a read or write operation.  This option is<br>
+relevant for type 3 (many-to-one) configurations and is discussed in the<br>
+section 'section'.
+<li><b>dir</b> - defines io stream as either a source or destination.<br>
+This is required for the primary io stream only (otherwise it's ignored).
+<li><b>nonblock</b> - sets the socket/file descriptor to use non-blocking I/O.<br>
+For the FIFO io type, non-blocking I/O is set by default and cannot
+be changed.
+</ol>
+<p>
+
+What follows is a list of I/O types, their required/non-required
+config options, and further information relevant to their usage.
+<h3>FILE</h3>
+The FILE iotype is used for regular files on a local filesystem.<br>
+Required Vars:<br>
+<ol>
+<li><b>path</b> - full pathname of file<br>
+</ol>
+Optional Vars: (none)<br>
+<br>
+<p>
+File will be created if it does not already exists.  If file is a
+<b>destination</b>, writes will append to file; if a <b>source</b> the
+file is read indefinitely (e.g., as in `tail -f`)
+</p>
+<p>
+<h3>FIFO</h3>
+A FIFO on the local filesystem.<br>
+Required Vars:<br>
+<ol>
+<li><b>path</b> - full pathname of FIFO<br>
+</ol>
+Optional Vars: (none)<br>
+<br>
+Will be created if doesn't already exist.  Uses non-blocking I/O by
+default
+</p>
+<p>
+<h3>PIPE</h3>
+
+A local process spawned by ioproxy.  I/O is read from STDOUT or
+written to STDIN of new process.<br>
+
+Required Vars:<br>
+<ol>
+<li><b>pipe_cmd</b> - full path to command to exec, plus args.  No enclosing quotes.<br>
+</ol>
+Optional Vars: (none)<br>
+</p>
+<p>
+<h3>SSH</h3>
+A command run on a remote host using SSH protocol.  Data is read from new proc's STDOUT.<br>
+Required Vars:<br>
+<ol>
+<li><b>ssh_cmd</b>  - command to exec on remote host; no enclosing quotes
+<li><b>host</b> - name of remote host, <b>or</b>
+<li><b>ip</b> - IPv4 addr of remote host
+</ol>
+<i>(If both <b>host</b> and <b>ip</b> are given, the value for <b>ip</b> will be used.</i><br>
+<br>
+Optional Vars: (none)<br>
+</p>
+<p>
+<h3>UNIX_SOCK</h3>
+A local, unix socket.
+Required Vars:
+</p>
+<ol>
+<li><b>path</b> = full pathname to unix socket in local filesystem
+<li><b>conn</b> = [SERVER|CLIENT] - connect to server specified in <i>path</i> (CLIENT), or<br>
+     create socket at <i>path</i> and listen for incoming connections (SERVER)
+</ol>
+Optional Vars:<br>
+<ol>
+<li><b>sockproto</b> - [DGRAM|STREAM]; use socket as STREAM or DGRAM socket.
+</ol>
+<p>
+
+If configured as a server, entry for socket in filesystem will be
+created at startup and deleted at normal shutdown.  <i>ioproxy</i>
+will return an error if filesystem entry for socket<br> already
+exists.
+
+</p>
+<p>
+<h3>UDP_SOCK</h3>
+A UDP socket.<br>
+Required Vars:<br>
+<ol>
+<li><b>conn</b> = [SERVER | CLIENT] - use CLIENT to send datagrams to <b>host</b>;<br>  
+use SERVER to create a listening socket on <b>port</b> and listen for incoming UDP traffic.
+<li><b>port</b> - network port on remote host
+</ol>
+Additional required vars if <b>conn</b> = CLIENT<br>
+<ol>
+<li><b>host</b> - name of host to connect to
+<li><b>ip</b>   - IPv4 addr of host to connect to
+</ol>
+<i>(only 1 of the above are required.  If both are given, the value
+for 'ip' will be used.)</i>
+<br>
+<br>
+Optional Vars: (none)<br>
+</p>
+<p>
+<h3>TCP_SOCK</h3>
+A TCP socket.<br>
+Required Vars:<br>
+<ol>
+<li><b>conn</b> = [SERVER | CLIENT] - use CLIENT to connect to <b>host</b>;<br>  
+use SERVER to create a listening socket on <b>port</b> and listen for incoming connections.
+<li><b>port</b> - network port
+</ol>
+Additional required vars if <b>conn</b> = CLIENT<br>
+<ol>
+<li><b>host</b> - name of host to connect to
+<li><b>ip</b>   - IPv4 addr of host to connect to
+</ol>
+<i>(only 1 of the above are required.  If both are given, the value
+for 'ip' will be used.</i>
+<br><br>
+Optional Vars:<br>
+<ol>
+<li><b>tls</b> - [true/false] - required to secure TCP connection with TLS.
+<li><b>cacert</b> - full pathname to CA certificate
+<li><b>cacertdir</b> - full path to a CA certificate directory
+<li><b>reqcrt</b> - [true/false] - validate hostname in remote hosts certificate.  Defaults to true.
+<li><b>host_cert</b> - a x509 certificate for host
+<li><b>host_key</b> - private key associated with <b>host_cert</b>
+<li><b>cli_vrfy</b> - for servers, request and validate a certificate from connecting clients.
+</ol>
+
+</p>
+<p>
+If using TLS, only one of <b>cacert</b> or <b>cacertdir</b> are
+required to validate the identity of the remote host.  When used, the
+remote host will be asked to provide a certificate to validate its
+identity.
+</p>
+<p>
+
+Both <b>our_cert</b> and <b>our_key</b> are required if the remote
+host will request our certificate to validate our identity.
+</p>
+<p>
+Typically a server sends these to clients to validate the identity of
+the server.  Servers can also request a certificate from connecting
+clients to validate their identity.
+
+
+
+</p>
+<p>
+
+
+<pre>
+iotype		associated vars (* = required)
+-----------------------------------------------
+STDOUT		- (none)
+STDIN		- (none)
+FILE		- path*
+FIFO		- path*
+PIPE		- pipe_cmd*
+SSH		- ssh_cmd*, host* or ip*
+UNIX_SOCK	- sockpath*, conn*, sockproto
+UDP_SOCK	- host* or ip*, conn*, port*, sockproto
+TCP_SOCK 	- host* or ip*, conn*, port*, tls, cacert, cacertdir, reqcrt, our_cert, our_key
+</pre>
+
+<pre>
+Var Name	  Allowable values + 
+-------------------------------------
+iotype*		- (FILE, FIFO, UNIX_SOCK, TCP_SOCK, UDP_SOCK, STDOUT, STDIN, PIPE, SSH) 
+dir		- src/dst - direction of io stream; source or destination
+nonblock	- true/false(f)
+bufsz		- buff size for rbuf entry
+
+path		- full path to filename (for regular files and FIFOs)
+
+Sockets/Networking
+host 		- hostname
+sockpath	- full path to unix socket
+ip		- ipv4 addr
+conn		- server/client 
+sockproto	- DGRAM/STREAM
+port		- port for network i/o
+
+
+tls		- (true/false)(f)
+cacert		- path to cacert
+cacertdir	- path to ca cert dir
+reqcrt		- true/false(t) - host verification policy for cert validation
+out_cert	- our cert
+our_key		- our key
+
+ssh_cmd		- remote command to exec over when using io type SSH.
+pipe_cmd	- command for iotype PIPE
+
+
+</pre>
+
+
+
+
+<pre>
+BASIC EXAMPLE OF DESCRIPTOR I/O USAGE
+-------------------------------------
+1. Host A on an internal network needs log file data from Host B in
+   DMZ.
+
+2. Log daemon on Host B can write data locally to any file type, but
+   to send data to another host, it needs to connect to a server
+   (initiate outbound TCP connection)
+
+3. Networking rules prohibit Host B in DMZ from initiating outbound
+   TCP connections to any host on internal network.
+
+4. Networking rules allow Host A to initiate TCP connections to Host B
+   in the DMZ
+
+Solution:
+1. On Host B in DMZ, configure <i>ioproxy</i> to:
+   i. open the data source (which is wherever the log daemon is
+   configured to write data: file, unix socket, FIFO, etc.
+   ii. open listening TCP port that uses TLS and writes data from
+   source to authenticated clients.
+
+2. On Host A, configure <i>ioproxy</i> to:
+   i.  connect to Host B's TCP port and read incoming data
+   ii. write incoming data to file (or user terminal, FIFO,
+   etc)
+
+
+
+</pre>
+
