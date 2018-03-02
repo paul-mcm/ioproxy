@@ -391,6 +391,11 @@ int do_tlsaccept(struct io_params *iop)
 
         tls_config_set_keypair_file(tls_cfg, sop->srvr_cert, sop->srvr_key);
 
+	if (sop->cacert_path != NULL || sop->cacert_dirpath != NULL) {
+	    config_cacert(sop, tls_cfg);
+	    tls_config_verify_client(tls_cfg);
+	}
+
         if ((tls = tls_server()) == NULL)
 	    log_die("tls_server() error\n");
 
@@ -485,16 +490,7 @@ int do_tlsconnect(struct io_params *iop)
 	if ((tls_cfg = tls_config_new()) == NULL)
 	    log_die("tls_config_new error: %s\n", tls_config_error(tls_cfg));
 
-	if (sop->cacert_path != NULL)
-	    if (tls_config_set_ca_file(tls_cfg, sop->cacert_path) != 0)
-		log_die("tls_config_set_ca_file() error: %s\n", tls_config_error(tls_cfg));
-
-	if (sop->cacert_dirpath != NULL)
-	    if (tls_config_set_ca_path(tls_cfg, sop->cacert_dirpath) != 0)
-		log_die("tls_config_set_ca_path() error: %s\n", tls_config_error(tls_cfg));
-
-	if (sop->cert_vrfy == FALSE)
-	    tls_config_insecure_noverifyname(tls_cfg); 
+	config_cacert(sop, tls_cfg);
 
 	for (;;) {
 	    sop->tls_ctx = tls_client();
@@ -674,4 +670,19 @@ int verify_knownhost(ssh_session session)
         }
         ssh_clean_pubkey_hash(&h);
         return 0;
+}
+
+void config_cacert(struct sock_param *sop, struct tls_config *cfg)
+{
+
+	if (sop->cacert_path != NULL)
+	    if (tls_config_set_ca_file(cfg, sop->cacert_path) != 0)
+		log_die("tls_config_set_ca_file() error: %s\n", tls_config_error(cfg));
+
+	if (sop->cacert_dirpath != NULL)
+	    if (tls_config_set_ca_path(cfg, sop->cacert_dirpath) != 0)
+		log_die("tls_config_set_ca_path() error: %s\n", tls_config_error(cfg));
+
+	if (sop->cert_vrfy == FALSE)
+	    tls_config_insecure_noverifyname(cfg);
 }

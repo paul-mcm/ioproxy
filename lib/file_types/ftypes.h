@@ -58,3 +58,5 @@ int do_netconnect(struct io_params *);
 int do_tlsconnect(struct io_params *);
 int do_tlsaccept(struct io_params *);
 int verify_knownhost(ssh_session);
+
+void config_cacert(struct sock_param *, struct tls_config *);

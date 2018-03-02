@@ -73,8 +73,6 @@ int fill(char *f, char *v, struct io_params *iop)
 	vlen = strlen(v);
 	sop = iop->sock_data;
 
-	printf("%s %s\n", f, v);
-
 	if ( strcasecmp(f, "iotype") == 0 ) {
 	    /* XXX DOESN'T CHECK FOR ERROR */
 	    if (set_desc_t(v, iop) != 0) {
@@ -113,7 +111,7 @@ int fill(char *f, char *v, struct io_params *iop)
 		strncpy(sop->ip, v, vlen + 1);
 	} else if (strcasecmp(f, "conn") == 0)
 		err = set_conn(v, iop);
-	else if (strcasecmp(f, "proto") == 0)
+	else if (strcasecmp(f, "sockproto") == 0)
 		err = set_sockio(v, iop);
 	else if (strcasecmp(f, "nonblock") == 0)
 		err = set_nonblock(v, iop);
