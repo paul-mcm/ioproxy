@@ -38,13 +38,10 @@ int main(int argc, char *argv[])
 
 	prog = basename(argv[0]);
 
-	if (strcasecmp(prog, "ioproxyd") == 0) {
-	    printf("TRUE\n");
+	if (strcasecmp(prog, "ioproxyd") == 0)
 	    daemonize = TRUE;
-	} else {
-	    printf("FALSE: %s\n", argv[0]);
+	else
 	    daemonize = FALSE;
-	}
 
 	while ((ch = getopt(argc, argv, "H:f:")) != -1) {
 	    switch (ch) {

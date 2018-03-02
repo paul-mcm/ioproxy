@@ -1,0 +1,29 @@
+INTRO
+------
+
+ioproxy is a tool for connecting I/O streams between unrelated
+processes. If a process produces output readable by another unrelated
+process, ioproxy can send that output to any other process, file,
+socket (local or remote host), or user's terminal.
+
+In addition to connecting I/O streams of different types, ioproxy can
+multiplex several input streams into a single output stream or
+duplicate a single input stream to multiple output streams.
+
+For example, ioproxy can simultaneously 'tail -f' the same (or
+different) files on different hosts, writing the output to the user's
+terminal.
+
+ioproxy can read data from a file on a remote host and write that data
+to multiple files on any number of other remote hosts.
+
+ioproxy can also be used to overcome some kinds of restrictions on
+data transfer imposed by network firewall/filtering rules.
+
+ioproxd, the daemon for long term I/O tasks, uses a configuration file
+(default: /etc/ioproxyd.conf). The companion program, ioproxy takes
+command line args and can be used for shorter, one-off tasks.
+
+ioproxy is still in development phase.
+
+Complete documentation: www.tetrardus.net/ioproxy/doc.html
