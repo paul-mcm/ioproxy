@@ -139,9 +139,8 @@ int rbuf_tls_writeto(struct io_params *iop)
 		    CNT_UPDATE(iop, w_ptr->len);
 		    w_ptr = w_ptr->next;
 		    continue;
-		} else {
-		    if ((r = do_rderr(iop, w_ptr)) < 0)
-			return r;
+		} else if ((r = do_rderr(iop, w_ptr)) < 0) {
+		    return r;
 		}
 	    }
 	} else {
@@ -152,9 +151,8 @@ int rbuf_tls_writeto(struct io_params *iop)
 		    CNT_UPDATE(iop, w_ptr->len);
 		    w_ptr = w_ptr->next;
 		    continue;
-		} else {
-		    if ((r = do_rderr(iop, w_ptr)) < 0)
-			return r;
+		} else if ((r = do_rderr(iop, w_ptr)) < 0) {
+		    return r;
 		}
 	    }
 	}
@@ -186,8 +184,7 @@ int rbuf_tls_readfrom(struct io_params *iop)
 		    } else if (nw < r_ptr->len && nw > 0) {
 			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
 			continue;
-		    } else if (nw <= 0) {
-			if ((r = do_wrerr(iop, r_ptr)) < 0)
+		    } else if (nw <= 0 && (r = do_wrerr(iop, r_ptr)) < 0) {
 			    return r;
 		    }
 		}
@@ -207,8 +204,7 @@ int rbuf_tls_readfrom(struct io_params *iop)
 		    } else if (nw < r_ptr->len && nw > 0) {
 			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
 			continue;
-		    } else if (nw <= 0) {
-			if ((r = do_wrerr(iop, r_ptr)) < 0)
+		    } else if (nw <= 0 && (r = do_wrerr(iop, r_ptr)) < 0) {
 			    return r;
 		    }
 		}
@@ -237,10 +233,8 @@ int rbuf_writeto(struct io_params *iop)
 		    CNT_UPDATE(iop, w_ptr->len);
 		    w_ptr = w_ptr->next;
 		    continue;
-		} else {
-		    if ((r = do_rderr(iop, w_ptr)) < 0) {
+		} else if ((r = do_rderr(iop, w_ptr)) < 0) {
 			return r;
-		    }
 		}
 	    }
 	} else {
@@ -251,8 +245,7 @@ int rbuf_writeto(struct io_params *iop)
 		    CNT_UPDATE(iop, w_ptr->len);
 		    w_ptr = w_ptr->next;
 		    continue;
-		} else {
-		    if ((r = do_rderr(iop, w_ptr)) < 0)
+		} else if ((r = do_rderr(iop, w_ptr)) < 0) {
 			return r;
 		}
 	    }
@@ -283,8 +276,7 @@ int rbuf_readfrom(struct io_params *iop)
 		    } else if (nw < r_ptr->len && nw > 0) {
 			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
 			continue;
-		    } else if (nw <= 0) {
-			if ((r = do_wrerr(iop, r_ptr)) < 0)
+		    } else if (nw <= 0 && (r = do_wrerr(iop, r_ptr)) < 0) {
 			    return r;
 		    }
 		}
@@ -304,8 +296,7 @@ int rbuf_readfrom(struct io_params *iop)
 		    } else if (nw < r_ptr->len && nw > 0) {
 			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
 			continue;
-		    } else if (nw <= 0) {
-			if ((r = do_wrerr(iop, r_ptr)) < 0)
+		    } else if (nw <= 0 && (r = do_wrerr(iop, r_ptr)) < 0) {
 			    return r;
 		    }
 		}
