@@ -41,7 +41,7 @@ if ((r = pthread_mutex_unlock(m)) != 0) {       \
 }
 
 #define UNLOCK(m, l)				\
-if (m->io_type != TYPE_2) {			\
+if (*m->cfgtype_p != TYPE_2) {			\
     MTX_UNLOCK(&l->mtx_lock);			\
 } else {					\
     RW_UNLOCK(&l->rw_lock);			\
@@ -479,7 +479,9 @@ int io_error(struct io_params *iop, int e, int n)
 	    return 0;
 	} else if (errno == EAGAIN || errno == EINTR) {
 	    return -1;
-	} else if (errno == EPIPE) {
+	} else if (errno == EPIPE || iop->io_type == FIFO) {
+	    return -1;
+	} else if (errno == EPIPE || iop->io_type == PIPE) {
 	    return -2;
 	} else {
 	    log_ret("unknown io error %d %s", e, iop->path);
@@ -521,9 +523,15 @@ int do_rderr(struct io_params *iop, struct rbuf_entry *rb)
 	    return -2;
 	}
 
-	if ((r = io_error(iop, errno, rb->len)) == 0) {
-	    sleep(3); /* CALL epoll/kqueue HERE */
-	    return 0;
+	r = io_error(iop, errno, rb->len);
+
+	if (r == 0) {
+	    if ((r = do_poll(iop)) == -1) {
+		do_close(iop, rb);
+		return -1;
+	    } else {
+		return 0;
+	    }
 	} else if (r == -1) {
 	    return 0;
 	} else if (r == -2) {
@@ -542,7 +550,7 @@ int do_wrerr(struct io_params *iop, struct rbuf_entry *rb)
 	}
 
 	r = io_error(iop, errno, rb->len);
-	if (r == 1) /* recv'd EAGAIN or EINTR */
+	if (r == 0) /* recv'd EAGAIN or EINTR */
 	   return 0;
 	else if (r == 0) {
 	    sleep_unlocked(iop, 3, rb);
@@ -553,6 +561,35 @@ int do_wrerr(struct io_params *iop, struct rbuf_entry *rb)
 	    return r;
 }
 
+int do_poll(struct io_params *iop)
+{
+	struct pollfd   pfd[1];
+
+	pfd[0].fd = iop->io_fd;
+
+	if (is_src(iop))
+	    pfd[0].events = POLLRDNORM;
+	else
+	    pfd[0].events = POLLWRNORM;
+
+	printf("Calling POLL for desc: %d path: %s\n", iop->io_fd, iop->path);
+
+	if (poll(pfd, 1, INFTIM) == -1) {
+	    printf("poll() error: %s\n", strerror(errno));
+	    exit(-1);
+	}
+
+	if ((pfd[0].revents & (POLLERR|POLLNVAL))) {
+	    log_msg("revents error\n");
+	    exit(-1);
+	} else if (pfd[0].revents & (POLLHUP)) { /* DISCONNECTED */
+	    printf("poll() returned POLLHUP\n");
+		return -1;
+	} else {
+	    printf("poll returned; continuing\n");
+	    return 0;
+	}
+}
 void sleep_unlocked(struct io_params *iop, int n, struct rbuf_entry *rb)
 {
 	int r;

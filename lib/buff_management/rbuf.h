@@ -26,6 +26,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
+#include <poll.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
@@ -66,6 +67,7 @@ void sleep_unlocked(struct io_params *, int, struct rbuf_entry *);
 int io_error(struct io_params *, int, int);
 int do_wrerr(struct io_params *, struct rbuf_entry *);
 int do_rderr(struct io_params *, struct rbuf_entry *);
+int do_poll(struct io_params *);
 
 void rbuf_locksync0(struct io_params *);
 void rbuf_locksync(struct io_params *);

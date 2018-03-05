@@ -222,8 +222,6 @@ int open_fifo(struct io_params *iop)
 	    }
 	}
 
-	oflags |= O_NONBLOCK;
-
 	for (;;) {
 	    if ((fd = open(iop->path, oflags)) < 0) {
 		if (errno == ENXIO) {

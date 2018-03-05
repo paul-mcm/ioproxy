@@ -349,6 +349,12 @@ void *io_thread(void *arg)
 		    log_msg("opening dscrptr for %s\n", iop->path);
 		}
 
+		/* Returns:
+		 *  -2 = non-recoverable error
+		 *  -1 = error; retry later;
+		 *   0 = successful open; I/O not through fd (SSH)
+		 *  >0 = successful open; fd is returned;
+		 */
 		if ((r = open_desc(iop)) < 0) {
 		    if (r == -2) { /* NON RECOVERABLE ERROR */
 			break;
@@ -382,7 +388,7 @@ void *io_thread(void *arg)
 		if (r == -2)
 		    break;
 
-	 	if (is_netsock(iop)) {
+		if (is_netsock(iop) || iop->io_type == FIFO) {
 		    close(iop->io_fd);
 		    iop->io_fd = -1;
 		}
