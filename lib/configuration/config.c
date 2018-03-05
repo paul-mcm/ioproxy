@@ -573,8 +573,11 @@ int validate_cfg(struct io_cfg *iocfg)
 
 void validate_iop(struct io_params *iop)
 {
-	if (iop->io_type == TCP_SOCK || iop->io_type == UDP_SOCK)
+	if (iop->io_type == TCP_SOCK || \
+	    iop->io_type == UDP_SOCK || \
+	    iop->io_type == UNIX_SOCK) {
 	    validate_sockparams(iop);
+	}
 }
 
 void validate_sockparams(struct io_params *iop)
@@ -584,7 +587,7 @@ void validate_sockparams(struct io_params *iop)
 
 	if (iop->io_type == TCP_SOCK)
 	    sop->sockio == STREAM;
-	else if (iop->io_type == TCP_SOCK || iop->io_type == UDP_SOCK || UNIX_SOCK)
+	else if (iop->io_type == UDP_SOCK || iop->io_type == UNIX_SOCK)
 	    sop->sockio == DGRAM;
 
 	if (sop->conn_type == SRVR) {

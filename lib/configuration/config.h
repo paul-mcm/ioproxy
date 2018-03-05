@@ -71,8 +71,8 @@ typedef enum {
 } T_SOCK;
 
 typedef enum {
-	DGRAM = 3,
-	STREAM = 4,
+	DGRAM,
+	STREAM,
 } T_SOCKIO;
 
 struct sock_param {
