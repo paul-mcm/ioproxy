@@ -32,6 +32,8 @@
 #include <syslog.h>
 #include <unistd.h>
 
+#include <sys/resource.h>
+
 #include <libssh/libssh.h>
 #include <libssh/callbacks.h>
 
@@ -41,7 +43,6 @@
 
 #define FALSE 0
 #define TRUE 1
-
 
 void terminate(void);
 void * iocfg_manager(void *);
@@ -60,6 +61,3 @@ void iop_setup(struct io_cfg *);
 void *iop0_thrd(void *);
 
 void copy_io_params(struct io_params *, struct io_params *);
-
-
-

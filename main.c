@@ -15,7 +15,7 @@
 
 #include "ioproxy.h"
 
-int	debug = TRUE;
+int	debug;
 char	*prog;
 
 void *iocfg_manager(void *);
@@ -30,11 +30,12 @@ int main(int argc, char *argv[])
 	pthread_attr_t		dflt_attrs;
 	struct io_cfg		*iocfg;
 	sigset_t		sig_set;
+	struct rlimit           rlim_ptr;
 	int			sig, r;
 	char 			*config_file = "/etc/ioproxyd.conf";
 	char			*host_file = '\0';
 	char			ch;
-	int daemonize;
+	int			daemonize;
 
 	prog = basename(argv[0]);
 
@@ -51,6 +52,8 @@ int main(int argc, char *argv[])
 		host_file = optarg;
 		if (validate_path(host_file) != 0)
 		    log_die("Host file path invalid\n");
+	    case 'd':
+		daemonize = FALSE;
 	    case '?':
 		log_die("Exiting\n");
            }
@@ -58,6 +61,16 @@ int main(int argc, char *argv[])
 
 	argc -= optind;
 	argv += optind;
+
+	if (getrlimit(RLIMIT_NOFILE, &rlim_ptr) < 0)
+	    log_syserr("rlimit failed %d", errno);
+
+	for (r = 3; r <= (int)rlim_ptr.rlim_cur; r++)
+	    close(r);
+
+	if (debug == TRUE)
+	    if (daemon(0, 0) < 0)
+		log_die("Failed to daemonize", errno);
 
 	if (validate_path(config_file) != 0)
 	    log_die("Config file path invalid\n");
