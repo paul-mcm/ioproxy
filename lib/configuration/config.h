@@ -89,11 +89,12 @@ struct sock_param {
 	char		*cacert_dirpath;
 	char		*host_cert;
 	char		*host_key;
-	struct tls	*tls_ctx;	
+	struct tls	*tls_ctx;
 	int		cert_vrfy;
 	char		*ssh_cmd;
 	ssh_session	ssh_s;
-	ssh_channel	ssh_chan;	
+	ssh_channel	ssh_chan;
+	struct sockaddr *host_addr;
 };
 
 /* s - shared

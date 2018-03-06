@@ -90,10 +90,10 @@ int main(int argc, char *argv[])
 	 */
 
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
-	    validate_cfg(iocfg);
+	    iop_setup(iocfg);
 
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
-	    iop_setup(iocfg);
+	    validate_cfg(iocfg);
 
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
 	    show_config(iocfg);
@@ -373,12 +373,16 @@ void *io_thread(void *arg)
 			r = rbuf_tls_writeto(iop);
 		    } else if (use_ssh(iop)) {
 			r = rbuf_ssh_writeto(iop);
+		    } else if (is_sock(iop) && sop->sockio == DGRAM) {
+			r = rbuf_dgram_writeto(iop);
 		    } else {
 			r = rbuf_writeto(iop);
 		    }
 		} else {
 		    if (use_tls(iop)) {
 			r = rbuf_tls_readfrom(iop);
+		    } else if (is_sock(iop) && sop->sockio == DGRAM) {
+			r = rbuf_dgram_readfrom(iop);
 		    } else {
 			r = rbuf_readfrom(iop);
 		    }

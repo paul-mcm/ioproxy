@@ -267,7 +267,7 @@ int open_file(struct io_params *iop)
 
 	if (lseek(fd, 0, SEEK_END) < 0)
 		log_syserr("lseek(2) failed\n", errno);
-	
+
 	return fd;
 }
 
@@ -276,6 +276,7 @@ int open_sock(struct io_params *iop)
 	int 			r;
 	struct sock_param	*sop;
 
+	r = 0;
 	sop = iop->sock_data;
 
 	if (sop->conn_type == CLIENT) {
@@ -284,7 +285,11 @@ int open_sock(struct io_params *iop)
 	    if (sop->listenfd < 0) {
 		if ((sop->listenfd = do_bind(iop)) < 0)
 		    log_msg("error binding socket");
+		    return -1;
 	    }
+
+	    if (iop->io_type == UDP_SOCK)
+		return 0;
 
 	    if ((r = do_accept(iop)) < 0)
 		return r;
@@ -369,7 +374,7 @@ int do_bind(struct io_params *iop)
 	    if (bind(lfd, (SA *) &net_saddr, sizeof(net_saddr)) < 0)
 		log_syserr("bind() error");
 
-	    if (listen(lfd, 1) != 0)
+	    if (iop->io_type == TCP_SOCK && (listen(lfd, 1)) != 0)
 		log_syserr("listen() error");
 
 	}
@@ -419,6 +424,7 @@ int do_accept(struct io_params *iop)
 	    clilen = offsetof(struct sockaddr_un, sun_path) + \
 		strlen(iop->sock_data->sockpath);
 	}
+
 	if ((sd = accept(iop->sock_data->listenfd, (SA *) &cliaddr, &clilen)) < 0) {
 	    if (errno == ECONNABORTED) {
 		log_ret("accept() error: %s", strerror(errno));
@@ -426,8 +432,8 @@ int do_accept(struct io_params *iop)
 	    } else {
 		log_syserr("fatal accept() error: %s", strerror(errno));
 		return -1;
-            }
-        }
+	    }
+	}
 	return sd;
 }
 
@@ -546,6 +552,11 @@ int do_netconnect(struct io_params *iop)
 			log_ret("socket() error");
 			continue;
 			}
+
+		    if (iop->io_type == UDP_SOCK) {
+			sop->host_addr = res->ai_addr;
+			return fd;
+		    }
 
 		    if (connect(fd, res->ai_addr, res->ai_addrlen) != 0) {
 			log_ret("connect() error");

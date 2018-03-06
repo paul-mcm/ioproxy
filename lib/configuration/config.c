@@ -251,7 +251,8 @@ int is_netsock(struct io_params *iop)
 
 int use_tls(struct io_params *iop)
 {
-	if (iop->sock_data != NULL && iop->sock_data->tls == TRUE)
+
+	if (is_sock(iop) && iop->sock_data->tls == TRUE)
 	    return 1;
 	else
 	    return 0;
@@ -587,19 +588,21 @@ void validate_sockparams(struct io_params *iop)
 
 	if (iop->io_type == TCP_SOCK)
 	    sop->sockio == STREAM;
-	else if (iop->io_type == UDP_SOCK || iop->io_type == UNIX_SOCK)
+	else if (iop->io_type == UDP_SOCK)
 	    sop->sockio == DGRAM;
+	else if (iop->io_type == UNIX_SOCK)
+	    sop->sockio == STREAM;
 
 	if (sop->conn_type == SRVR) {
-	    if (iop->io_type == UDP_SOCK)
-		log_die("Config error: No udp listening sockets");
 	    if (sop->hostname != NULL)
 		log_msg("Config notice: hostnames ignored for server listening sockets\n");
-	}
 
-	if (is_netsock(iop) && sop->conn_type == CLIENT) {
+	    if (is_dst(iop) && iop->io_type == UDP_SOCK)
+		log_die("UDP listening servers can't be destinations\n");
+
+	} else if (is_netsock(iop) && sop->conn_type == CLIENT) {
 	    if (sop->hostname == NULL && sop->ip == NULL)
-		log_die("config error: hostname required for tcp sockets\n");
+		log_die("config error: hostname required for sockets\n");
 	}
 
 	if (sop->tls == TRUE) {

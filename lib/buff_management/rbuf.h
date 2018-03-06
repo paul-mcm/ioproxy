@@ -56,6 +56,8 @@ int rbuf_writeto(struct io_params *);
 int rbuf_tls_writeto(struct io_params *);
 int rbuf_tls_readfrom(struct io_params *);
 int rbuf_ssh_writeto(struct io_params *);
+int rbuf_dgram_writeto(struct io_params *);
+int rbuf_dgram_readfrom(struct io_params *);
 
 int rbuf_t3_readfrom(struct io_params *);
 int rbuf_t3_tlsreadfrom(struct io_params *);

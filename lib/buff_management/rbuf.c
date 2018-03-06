@@ -304,6 +304,110 @@ int rbuf_readfrom(struct io_params *iop)
 	}
 }
 
+int rbuf_dgram_writeto(struct io_params *iop)
+{
+	struct sock_param	*sop;
+	struct rbuf_entry	*w_ptr;
+	socklen_t		len;
+	int 			i, r;
+
+	sop = iop->sock_data;
+	w_ptr = iop->w_ptr;
+
+	len = sizeof(*sop->host_addr);
+
+	if (*iop->listready == 0) {
+	    /* THIS THREAD MUST GET THE LOCK FIRST */
+	    LOCK(iop, w_ptr);
+	    rbuf_locksync0(iop);
+	}
+
+	if (*iop->cfgtype_p != TYPE_2) {
+	    for (;;) {
+		if ((w_ptr->len = recvfrom(sop->listenfd, w_ptr->line, iop->buf_sz, 0, sop->host_addr, &len)) > 0) {
+		    MTX_LOCK(&w_ptr->next->mtx_lock);
+		    MTX_UNLOCK(&w_ptr->mtx_lock);
+		    CNT_UPDATE(iop, w_ptr->len);
+		    w_ptr = w_ptr->next;
+		    continue;
+		} else if ((r = do_rderr(iop, w_ptr)) < 0) {
+			return r;
+		}
+	    }
+	} else {
+	    for (;;) {
+		if ((w_ptr->len = recvfrom(sop->listenfd, w_ptr->line, iop->buf_sz, 0, sop->host_addr, &len)) > 0) {
+		    WR_LOCK(&w_ptr->next->rw_lock);
+		    RW_UNLOCK(&w_ptr->rw_lock);
+		    CNT_UPDATE(iop, w_ptr->len);
+		    w_ptr = w_ptr->next;
+		    continue;
+		} else if ((r = do_rderr(iop, w_ptr)) < 0) {
+			return r;
+		}
+	    }
+	}
+}
+
+int rbuf_dgram_readfrom(struct io_params *iop)
+{
+        struct rbuf_entry 	*r_ptr;
+	struct sock_param	*sop;
+	socklen_t		len;
+	int 			nleft, r;
+	ssize_t			nw;
+	char			*lptr;
+
+	sop = iop->sock_data;
+	r_ptr = set_rbuf_lock(iop);
+	len = sizeof(*sop->host_addr);
+
+	if (*iop->cfgtype_p != TYPE_2) {
+	    for (;;) {
+		lptr = r_ptr->line;
+		nleft = r_ptr->len;
+		while (nleft > 0) {
+		    nw = sendto(iop->io_fd, r_ptr->line, r_ptr->len, 0, sop->host_addr, len);
+		    if (nw == r_ptr->len) {
+			MTX_LOCK(&r_ptr->next->mtx_lock);
+			MTX_UNLOCK(&r_ptr->mtx_lock);
+			CNT_UPDATE(iop, nw);
+			r_ptr = r_ptr->next;
+			break;
+		    } else if (nw < r_ptr->len && nw > 0) {
+			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
+			continue;
+		    } else if (nw <= 0 && (r = do_wrerr(iop, r_ptr)) < 0) {
+			    return r;
+		    }
+		}
+	    }
+	} else {
+	    for (;;) {
+		lptr = r_ptr->line;
+		nleft = r_ptr->len;
+		while (nleft > 0) {
+		    nw = sendto(iop->io_fd, r_ptr->line, r_ptr->len, 0, sop->host_addr, len);
+		    if (nw == r_ptr->len) {
+			RD_LOCK(&r_ptr->next->rw_lock);
+			RW_UNLOCK(&r_ptr->rw_lock);
+			CNT_UPDATE(iop, nw);
+			r_ptr = r_ptr->next;
+			break;
+		    } else if (nw < r_ptr->len && nw > 0) {
+			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
+			continue;
+		    } else if (nw <= 0 && (r = do_wrerr(iop, r_ptr)) < 0) {
+			    return r;
+		    }
+		}
+	    }
+	}
+}
+
+
+
+
 int rbuf_t3_tlsreadfrom(struct io_params *iop)
 {
         struct rbuf_entry 	*r_ptr;
