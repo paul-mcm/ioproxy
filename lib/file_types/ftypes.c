@@ -288,7 +288,7 @@ int open_sock(struct io_params *iop)
 		    return -1;
 	    }
 
-	    if (iop->io_type == UDP_SOCK)
+	    if (iop->io_type == UDP_SOCK || sop->sockio == DGRAM)
 		return 0;
 
 	    if ((r = do_accept(iop)) < 0)
@@ -312,6 +312,7 @@ int do_bind(struct io_params *iop)
 	int			lfd, r, sopt;
 	struct sockaddr_un      u_saddr;
 	struct sockaddr_in      net_saddr;
+	struct sock_param	*sop;
 	mode_t                  old_umask;
 	socklen_t		len;
 
@@ -325,14 +326,19 @@ int do_bind(struct io_params *iop)
 
 	    len = offsetof(struct sockaddr_un, sun_path) + strlen(iop->path);
 
-	    if ((lfd = socket(AF_LOCAL, SOCK_DGRAM, 0)) < 0)
-		log_syserr("Failed to create listening socket:", errno);
+	    if (sop->sockio == DGRAM) {
+		if ((lfd = socket(AF_LOCAL, SOCK_DGRAM, 0)) < 0)
+		    log_syserr("Failed to create listening socket:", errno);
+	    } else {
+		if ((lfd = socket(AF_LOCAL, SOCK_STREAM, 0)) < 0)
+		     log_syserr("Failed to create listening socket:", errno);
 
-	    if ((r = connect(lfd, (SA *)&u_saddr, sizeof(u_saddr))) == 0) {
-		log_die("Error: listing socket already listening");
-	    } else if (r == -1 && errno != ENOENT) {
-		if (unlink(iop->path) != 0)
+		if ((r = connect(lfd, (SA *)&u_saddr, sizeof(u_saddr))) == 0) {
+		    log_die("Error: listing socket already listening");
+		} else if (r == -1 && errno != ENOENT) {
+		    if (unlink(iop->path) != 0)
 			log_syserr("Failed to unlink unix socket: %s %s", iop->path, strerror(errno));
+		}
 	    }
 
 	    old_umask = umask(S_IXUSR|S_IXGRP|S_IXOTH);
@@ -416,16 +422,19 @@ int do_tlsaccept(struct io_params *iop)
 
 int do_accept(struct io_params *iop)
 {
-	int			sd;
+	struct sock_param	*sop;
 	struct sockaddr_un 	cliaddr;
 	int			clilen;
+	int			sd;
 
-	if (iop->io_type == UNIX_SOCK) {	
+	sop = iop->sock_data;
+
+	if (iop->io_type == UNIX_SOCK) {
 	    clilen = offsetof(struct sockaddr_un, sun_path) + \
-		strlen(iop->sock_data->sockpath);
+		strlen(sop->sockpath);
 	}
 
-	if ((sd = accept(iop->sock_data->listenfd, (SA *) &cliaddr, &clilen)) < 0) {
+	if ((sd = accept(sop->listenfd, (SA *)&cliaddr, &clilen)) < 0) {
 	    if (errno == ECONNABORTED) {
 		log_ret("accept() error: %s", strerror(errno));
 		return -1;
