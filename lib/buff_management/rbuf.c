@@ -621,6 +621,12 @@ int do_rderr(struct io_params *iop, struct rbuf_entry *rb)
 	r = io_error(iop, errno, rb->len);
 
 	if (r == 0) {
+	/* POLL WILL JUST RETURN IMMEDIATELY ON EOF */
+	    if (iop->io_type == REG_FILE) {
+		sleep(3);
+		return 0;
+	    }
+
 	    if ((r = do_poll(iop)) == -1) {
 		do_close(iop, rb);
 		return -1;
