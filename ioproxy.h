@@ -53,11 +53,13 @@ int validate_ftype(struct io_params *, struct stat *);
 void ioparam_list_kill(struct io_cfg *);
 int cancel_ioparam(struct io_params *);
 
-void set_thrd_sigmask(sigset_t *);
+void set_thrd_sigmask(void);
 void release_mtx(void *);
 void *sigterm_thrd(void *);
+void *sighup_thrd(void *);
 
 void iop_setup(struct io_cfg *);
 void *iop0_thrd(void *);
+
 
 void copy_io_params(struct io_params *, struct io_params *);

@@ -147,6 +147,7 @@ struct io_cfg {
 };
 
 LIST_HEAD(all_cfg_list, io_cfg) all_cfg, *all_cfgs;
+LIST_HEAD(new_cfg_list, io_cfg) new_cfg, *new_cfgs;
 
 struct io_cfg * parse_config(FILE *);
 int read_config(struct all_cfg_list *, char *);
@@ -190,5 +191,8 @@ void free_sock_param(struct sock_param *);
 int validate_cfg(struct io_cfg *);
 void validate_iop(struct io_params *);
 void validate_sockparams(struct io_params *);
+
+int compare_io_params(struct io_params *, struct io_params *);
+int cnt_secondaries(struct io_cfg *);
 
 #endif

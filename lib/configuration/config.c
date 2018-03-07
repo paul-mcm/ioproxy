@@ -395,9 +395,9 @@ void set_cfg_type(struct io_cfg *iocfg)
 	struct iop0_params	*iop0;
 	struct iop1_params	*iop1;
 
+	n = cnt_secondaries(iocfg);
+
 	iop0 = LIST_FIRST(&iocfg->iop0_paths);
-        LIST_FOREACH(iop1, &iop0->io_paths, io_paths)
-                n++;
 
         if (n == 1 && iop0->iop->io_drn == SRC)
                 iocfg->cfg_type = TYPE_1;
@@ -620,4 +620,85 @@ void validate_sockparams(struct io_params *iop)
 		log_die("Config errer: no TLS available for UDP sockets");
 
 	}
+}
+
+int compare_io_params(struct io_params *iop1, struct io_params *iop2)
+{
+	struct sock_param	*sop1, *sop2;
+
+	sop1 = iop1->sock_data;
+	sop2 = iop2->sock_data;
+
+	if (iop1->cfgtype_p != iop2->cfgtype_p)
+	    return -1;
+
+	if (iop1->io_type != iop2->io_type)
+	    return -1;
+
+	if (iop1->buf_sz != iop2->buf_sz)
+	    return -1;
+
+	if (iop1->nonblock != iop2->nonblock)
+	    return -1;
+
+	if (iop1->path != iop2->path)
+	    return -1;
+
+	if (iop1->pipe_cmd != iop2->pipe_cmd)
+	    return -1;
+
+	/* SOCK DATA. CHECK FOR sock_data DONE BY COMPARING io_types */
+	if (sop1->conn_type != sop2->conn_type)
+	    return -1;
+
+	if (sop1->sockio != sop2->sockio)
+	    return -1;
+
+	if (sop1->hostname != sop2->hostname)
+	    return -1;
+
+	if (sop1->ip != sop2->ip)
+	    return -1;
+
+	if (sop1->sockpath != sop2->sockpath)
+	    return -1;
+
+	if (sop1->port != sop2->port)
+	    return -1;
+
+	if (sop1->ssh_cmd != sop2->ssh_cmd)
+	    return -1;
+
+	/* TLS options */
+	if (sop1->tls == sop2->tls && sop1->tls == TRUE)
+	    return -1;
+
+	if (sop1->cacert_path != sop2->cacert_path)
+	    return -1;
+
+	if (sop1->cacert_dirpath != sop2->cacert_dirpath)
+	    return -1;
+
+	if (sop1->cert_vrfy != sop2->cert_vrfy)
+	    return -1;
+
+	if (sop1->host_cert != sop2->host_cert)
+	    return -1;
+
+	if (sop1->host_key != sop2->host_key)
+	    return -1;
+
+}
+
+int cnt_secondaries(struct io_cfg *iocfg)
+{
+        int 			n;
+	struct iop0_params	*iop0;
+	struct iop1_params	*iop1;
+
+	iop0 = LIST_FIRST(&iocfg->iop0_paths);
+        LIST_FOREACH(iop1, &iop0->io_paths, io_paths)
+	    n++;
+
+	return n;
 }

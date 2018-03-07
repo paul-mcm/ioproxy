@@ -82,7 +82,8 @@ int main(int argc, char *argv[])
 	    log_die("tls_init() error\n");
 
 	sigemptyset(&sig_set);
-	 sigaddset(&sig_set, SIGTERM);
+        sigaddset(&sig_set, SIGTERM);
+        sigaddset(&sig_set, SIGHUP);
 	if (pthread_sigmask(SIG_BLOCK, &sig_set, NULL) != 0)
 	    log_die("pthread_sigmask() error\n");
 
@@ -114,14 +115,17 @@ int main(int argc, char *argv[])
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
 	    show_config(iocfg);
 
-	if ((r = pthread_attr_init(&dflt_attrs)) != 0)
-	    log_die("Error initing thread attrs: %d\n", r);
+        if ((r = pthread_attr_init(&dflt_attrs)) != 0)
+            log_die("Error initing thread attrs: %d\n", r);
 
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
 		if (pthread_create(&tid, &dflt_attrs, iocfg_manager, (void *)iocfg) != 0)
                 	log_ret("error pthread_create: ");
 
 	if (pthread_create(&sigterm_tid, &dflt_attrs, sigterm_thrd, NULL) != 0)
+		log_die("error pthread_create()");
+
+	if (pthread_create(&sighup_tid, &dflt_attrs, sighup_thrd, NULL) != 0)
 		log_die("error pthread_create()");
 
 	/* BLOCK */
@@ -301,7 +305,7 @@ void *io_t3_thread(void *arg)
 
 	iop = (struct io_params *)arg;
 	
-	set_thrd_sigmask(&sig_set);
+	set_thrd_sigmask();
 	pthread_cleanup_push(release_mtx, iop);
 
 	log_msg("Running io_t3_thread %s\n", iop->path);
@@ -349,13 +353,12 @@ void *io_thread(void *arg)
 {
 	struct io_params	*iop;
 	struct sock_param	*sop;
-	sigset_t		sig_set;
 	int			r;
 
 	iop = (struct io_params *)arg;
 	sop = iop->sock_data;
 
-	set_thrd_sigmask(&sig_set);
+	set_thrd_sigmask();
 
 	for (;;) {
 	    if (iop->io_fd < 0) {
@@ -507,15 +510,16 @@ void * sigterm_thrd(void *arg)
         pthread_exit(NULL);
 }
 
-void set_thrd_sigmask(sigset_t *s)
+void set_thrd_sigmask(void)
 {
-	int 	r;
+	sigset_t	s;
+	int		r;
 	
-	sigemptyset(s);
-        sigaddset(s, SIGTERM);
-        sigaddset(s, SIGHUP);
+	sigemptyset(&s);
+        sigaddset(&s, SIGTERM);
+        sigaddset(&s, SIGHUP);
 
-        if ((r = pthread_sigmask(SIG_BLOCK, s, NULL)) != 0)
+        if ((r = pthread_sigmask(SIG_BLOCK, &s, NULL)) != 0)
 		log_die("pthread_sigmask error: %d\n", r);
 }
 
@@ -573,3 +577,36 @@ void copy_io_params(struct io_params *src, struct io_params *dst)
 	if (src->sock_data != NULL)
 		memcpy(dst->sock_data, src->sock_data, sizeof(struct sock_param));
 }
+
+void * sighup_thrd(void *a)
+{
+	int             sig;
+	sigset_t        sig_set;
+	struct io_cfg	*iocfg;
+
+	for (;;) {
+	    sigemptyset(&sig_set);
+	    sigaddset(&sig_set, SIGHUP);
+
+	    pthread_sigmask(SIG_BLOCK, &sig_set, NULL);
+
+	    sigwait(&sig_set, &sig);
+
+	    SIGHUP_STAT = TRUE;
+
+	    /* REREAD CONFIG FILE */
+	    LIST_INIT(&new_cfg);
+
+	    read_config((struct all_cfg_list *)&new_cfg, config_file);
+
+	    LIST_FOREACH(iocfg, (struct all_cfg_list *)&new_cfg, io_cfgs)
+		iop_setup(iocfg);
+
+	    LIST_FOREACH(iocfg, &new_cfg, io_cfgs)
+		validate_cfg(iocfg);
+
+	    LIST_FOREACH(iocfg, &new_cfg, io_cfgs)
+		show_config(iocfg);
+	}
+}
+
