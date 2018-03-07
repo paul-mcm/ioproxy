@@ -96,7 +96,7 @@ struct io_cfg *parse_config(FILE *fp)
 				break;
 		}
 		if (strncmp(p, "(", 1) == 0) {
-			fseek(fp, -(strlen(p)), SEEK_CUR);
+			fseek(fp, -(strlen(p) + 1), SEEK_CUR);
 			continue;
 		} else if (strncmp(p, "}", 1) == 0) {
 			break;
