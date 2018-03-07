@@ -14,15 +14,14 @@
  */
 
 #include "ioproxy.h"
+void	*iocfg_manager(void *);
+void	*io_thread(void *);
 
-int	debug;
-char	*prog;
-
-void *iocfg_manager(void *);
-void *io_thread(void *);
-
-volatile sig_atomic_t SIGHUP_STAT;
-volatile sig_atomic_t SIGTERM_STAT;
+int			debug;
+char			*prog;
+char			*config_file = "/etc/ioproxyd.conf";
+volatile sig_atomic_t	SIGHUP_STAT;
+volatile sig_atomic_t	SIGTERM_STAT;
 
 int main(int argc, char *argv[])
 {
@@ -32,7 +31,6 @@ int main(int argc, char *argv[])
 	sigset_t		sig_set;
 	struct rlimit           rlim_ptr;
 	int			sig, r;
-	char 			*config_file = "/etc/ioproxyd.conf";
 	char			*host_file = '\0';
 	char			ch;
 	int			daemonize;
@@ -44,16 +42,20 @@ int main(int argc, char *argv[])
 	else
 	    daemonize = FALSE;
 
-	while ((ch = getopt(argc, argv, "H:f:")) != -1) {
+	while ((ch = getopt(argc, argv, "dH:f:")) != -1) {
 	    switch (ch) {
 	    case 'f':
 		config_file = optarg;
+		break;
 	    case 'H':
 		host_file = optarg;
 		if (validate_path(host_file) != 0)
 		    log_die("Host file path invalid\n");
+		break;
 	    case 'd':
+		debug = TRUE;
 		daemonize = FALSE;
+		break;
 	    case '?':
 		log_die("Exiting\n");
            }
@@ -68,9 +70,10 @@ int main(int argc, char *argv[])
 	for (r = 3; r <= (int)rlim_ptr.rlim_cur; r++)
 	    close(r);
 
-	if (debug == TRUE)
+	if (debug == FALSE) {
 	    if (daemon(0, 0) < 0)
 		log_die("Failed to daemonize", errno);
+	}
 
 	if (validate_path(config_file) != 0)
 	    log_die("Config file path invalid\n");
@@ -79,7 +82,7 @@ int main(int argc, char *argv[])
 	    log_die("tls_init() error\n");
 
 	sigemptyset(&sig_set);
-        sigaddset(&sig_set, SIGTERM);
+	 sigaddset(&sig_set, SIGTERM);
 	if (pthread_sigmask(SIG_BLOCK, &sig_set, NULL) != 0)
 	    log_die("pthread_sigmask() error\n");
 
@@ -111,8 +114,8 @@ int main(int argc, char *argv[])
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
 	    show_config(iocfg);
 
-        if ((r = pthread_attr_init(&dflt_attrs)) != 0)
-            log_die("Error initing thread attrs: %d\n", r);
+	if ((r = pthread_attr_init(&dflt_attrs)) != 0)
+	    log_die("Error initing thread attrs: %d\n", r);
 
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
 		if (pthread_create(&tid, &dflt_attrs, iocfg_manager, (void *)iocfg) != 0)
