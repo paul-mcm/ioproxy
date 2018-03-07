@@ -209,7 +209,7 @@ int open_fifo(struct io_params *iop)
 	int		perms;
 	int		r;
 
-	oflags = set_flags(iop);
+	oflags = set_flags(iop); /* FIFOs nonblocking by default */
 	perms = S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH;
 
 	if (stat(iop->path, &s) < 0) {
@@ -618,7 +618,7 @@ int set_flags(struct io_params *iop)
 	else
 		f = O_WRONLY|O_APPEND;
 
-	if (iop->nonblock == TRUE)
+	if (iop->nonblock == TRUE || iop->io_type == FIFO)
 		f |= O_NONBLOCK;
 
 	return f;
