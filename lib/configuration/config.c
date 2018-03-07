@@ -48,7 +48,8 @@ int read_config(struct all_cfg_list *all, char *cfg_file)
                 if (feof(fp) != 0)
                         break;
         }
-	fclose(fp);
+	if (fclose(fp) != 0)
+	    log_syserr("fclose failed\n");
 }
 
 struct io_cfg *parse_config(FILE *fp)
