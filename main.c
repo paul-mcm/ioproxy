@@ -511,7 +511,7 @@ void * sigterm_thrd(void *arg)
 	/* BLOCK */
         sigwait(&sig_set, &sig);
         SIGTERM_STAT = TRUE;
-        pthread_exit(NULL);
+        pthread_exit((void *)0);
 }
 
 void set_thrd_sigmask(void)
@@ -639,7 +639,7 @@ void * sighup_thrd(void *a)
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
 	    show_config(iocfg);
 
-	pthread_exit(NULL);
+	pthread_exit((void *)0);
 }
 
 int cancel_threads(struct iop0_params *iop0)

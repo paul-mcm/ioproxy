@@ -275,8 +275,6 @@ int rbuf_readfrom(struct io_params *iop)
 		}
 	    }
 	}
-
-	pthread_exit(NULL);
 }
 
 int rbuf_dgram_writeto(struct io_params *iop)
