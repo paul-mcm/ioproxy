@@ -37,8 +37,6 @@
 
 #include <libssh/libssh.h>
 
-/* #include "../buff_management/rbuf.h" */
-
 #define FALSE		0
 #define TRUE		1
 
@@ -116,6 +114,7 @@ struct io_params {
 	pthread_mutex_t		listlock;	/* s */
 	pthread_cond_t		readable;	/* s */
 	pthread_mutex_t		fd_lock;	/* s */
+	pthread_barrier_t	thrd_b;		/* s */
 	int			buf_sz;
 	int			io_fd;
 	int			*iofd_p;	/* TYPE 3 ONLY */
@@ -127,12 +126,13 @@ struct io_params {
 	unsigned long		bytes;
 	unsigned long		io_cnt;
         struct sock_param	*sock_data;	/* MAY BE NULL */
+	struct iop1_paths	*iop1_p;
 };
 
 struct iop0_params {
-	struct io_params		*iop;
-	LIST_HEAD(, iop1_params)	io_paths;
-	LIST_ENTRY(iop0_params)		iop0_paths;
+	struct io_params			*iop;
+	LIST_HEAD(iop1_paths, iop1_params)	io_paths;
+	LIST_ENTRY(iop0_params)			iop0_paths;
 };
 
 struct iop1_params {
@@ -146,8 +146,11 @@ struct io_cfg {
 	LIST_ENTRY(io_cfg)	    io_cfgs;
 };
 
-LIST_HEAD(all_cfg_list, io_cfg) all_cfg, *all_cfgs;
-LIST_HEAD(new_cfg_list, io_cfg) new_cfg, *new_cfgs;
+LIST_HEAD(all_cfg_list, io_cfg) all_cfg;
+struct all_cfg_list *all_cfgs;
+
+LIST_HEAD(new_cfg_list, io_cfg) new_cfg;
+struct new_cfg_list *new_cfgs;
 
 struct io_cfg * parse_config(FILE *);
 int read_config(struct all_cfg_list *, char *);
@@ -183,6 +186,7 @@ struct io_params	*iop_alloc(void);
 struct sock_param	*sock_param_alloc(void);
 struct rbuf_entry 	*set_rbuf_lock(struct io_params *);
 
+void free_iocfg(struct io_cfg *);
 void free_iop0(struct iop0_params *);
 void free_iop1(struct iop1_params *);
 void free_iop(struct io_params *);
@@ -193,6 +197,7 @@ void validate_iop(struct io_params *);
 void validate_sockparams(struct io_params *);
 
 int compare_io_params(struct io_params *, struct io_params *);
-int cnt_secondaries(struct io_cfg *);
+int cnt_secondaries(struct iop0_params *);
+struct iop0_params *compare_iop0(struct io_cfg *, struct io_cfg *);
 
 #endif

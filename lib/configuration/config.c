@@ -395,9 +395,8 @@ void set_cfg_type(struct io_cfg *iocfg)
 	struct iop0_params	*iop0;
 	struct iop1_params	*iop1;
 
-	n = cnt_secondaries(iocfg);
-
 	iop0 = LIST_FIRST(&iocfg->iop0_paths);
+	n = cnt_secondaries(iop0);
 
         if (n == 1 && iop0->iop->io_drn == SRC)
                 iocfg->cfg_type = TYPE_1;
@@ -411,7 +410,6 @@ void set_cfg_type(struct io_cfg *iocfg)
 	iop0->iop->cfgtype_p = &iocfg->cfg_type;
         LIST_FOREACH(iop1, &iop0->io_paths, io_paths)
 		iop1->iop->cfgtype_p = &iocfg->cfg_type;
-
 }
 
 T_DATA set_io_dir(char *p)
@@ -503,7 +501,6 @@ struct io_params *iop_alloc(void)
 	return iop;
 }
 
-
 struct sock_param *sock_param_alloc()
 {
 	struct sock_param *sd;
@@ -518,6 +515,28 @@ struct sock_param *sock_param_alloc()
 	sd->listenfd	= -1;
 	sd->cert_vrfy	= TRUE;
 	return sd;
+}
+
+void free_iocfg(struct io_cfg *iocfg)
+{
+	struct iop0_params	*iop0;
+	struct iop1_params	*iop1;
+	struct io_params	*iop;
+	int 	r;
+
+	while (!LIST_EMPTY(&iocfg->iop0_paths)) {
+	    iop0 = LIST_FIRST(&iocfg->iop0_paths);
+
+	    while (!LIST_EMPTY(&iop0->io_paths)) {
+		iop1 = LIST_FIRST(&iop0->io_paths);
+		LIST_REMOVE(iop1, io_paths);
+		free_iop(iop1->iop);
+		free(iop1);
+	    }
+
+	    LIST_REMOVE(iop0, iop0_paths);
+	    free_iop0(iop0);
+	}
 }
 
 void free_sock_param(struct sock_param *sd)
@@ -540,11 +559,14 @@ void free_iop0(struct iop0_params *iop0)
 	struct io_params *iop;
 
 	iop = iop0->iop;
+
         pthread_mutex_destroy(&iop->listlock);
         pthread_cond_destroy(&iop->readable);
-	pthread_mutex_destroy(&iop->fd_lock);
 
-	free_rbuf(iop->rbuf_p);  /* XXX WHAT HAPPENS TO OTHER THREADS LOCKED ON RBUFF? */
+	if (*iop0->iop->cfgtype_p == TYPE_3)
+	    pthread_mutex_destroy(&iop->fd_lock);
+
+	free_rbuf(iop);  /* XXX WHAT HAPPENS TO OTHER THREADS LOCKED ON RBUFF? */
         free(iop->listready);  /* XXX WHY IS THIS MALLOC'D? */
         free_iop(iop);
 }
@@ -595,12 +617,12 @@ void validate_sockparams(struct io_params *iop)
 	    sop->sockio == STREAM;
 
 	if (sop->conn_type == SRVR) {
-	    if (sop->hostname != NULL)
+	    if (sop->hostname != NULL) {
 		log_msg("Config notice: hostnames ignored for server listening sockets\n");
-
-	    if (is_dst(iop) && iop->io_type == UDP_SOCK)
+	    }
+	    if (is_dst(iop) && iop->io_type == UDP_SOCK) {
 		log_die("UDP listening servers can't be destinations\n");
-
+	    }
 	} else if (is_netsock(iop) && sop->conn_type == CLIENT) {
 	    if (sop->hostname == NULL && sop->ip == NULL)
 		log_die("config error: hostname required for sockets\n");
@@ -630,6 +652,9 @@ int compare_io_params(struct io_params *iop1, struct io_params *iop2)
 	sop2 = iop2->sock_data;
 
 	if (iop1->cfgtype_p != iop2->cfgtype_p)
+	    return -1;
+
+	if (iop1->io_drn != iop2->io_drn)
 	    return -1;
 
 	if (iop1->io_type != iop2->io_type)
@@ -688,17 +713,36 @@ int compare_io_params(struct io_params *iop1, struct io_params *iop2)
 	if (sop1->host_key != sop2->host_key)
 	    return -1;
 
+	/* FALL THROUGH */
+	return 0;
 }
 
-int cnt_secondaries(struct io_cfg *iocfg)
+int cnt_secondaries(struct iop0_params *iop0)
 {
         int 			n;
-	struct iop0_params	*iop0;
 	struct iop1_params	*iop1;
 
-	iop0 = LIST_FIRST(&iocfg->iop0_paths);
-        LIST_FOREACH(iop1, &iop0->io_paths, io_paths)
+	n = 0;
+        LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
 	    n++;
-
+	}
 	return n;
+}
+
+struct iop0_params *compare_iop0(struct io_cfg *iocfg, struct io_cfg *new_iocfg)
+{
+	struct iop0_params	*iop0, *newiop0;
+	struct io_params	*iop, *newiop;
+
+	iop0 = LIST_FIRST(&iocfg->iop0_paths);
+	newiop0 = LIST_FIRST(&new_iocfg->iop0_paths);
+
+	if (compare_io_params(iop0->iop, newiop0->iop) != 0)
+	    return NULL;
+
+	if (cnt_secondaries(iop0) != cnt_secondaries(newiop0))
+	    return NULL;
+
+	/* FALL THROUGH */
+	return iop0;
 }

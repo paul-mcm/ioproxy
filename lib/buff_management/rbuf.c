@@ -14,46 +14,13 @@
  */
 
 #include "rbuf.h"
+extern volatile sig_atomic_t SIGHUP_STAT;
 
-#define RD_LOCK(m)                              \
-if ((r = pthread_rwlock_rdlock(m)) != 0) {      \
-    log_die("rdlock error: %d\n", r);           \
-} 
-
-#define WR_LOCK(m)                              \
-if ((r = pthread_rwlock_wrlock(m)) != 0) {      \
-    log_die("wrlock error: %d\n", r);           \
-}
-
-#define RW_UNLOCK(m)                            \
-if ((r = pthread_rwlock_unlock(m)) != 0) {      \
-    log_die("rwlock unlock: %d\n", r);          \
-}
-
-#define MTX_LOCK(m)                             \
-if ((r = pthread_mutex_lock(m)) != 0) {         \
-    log_die("mtx lock error: %d\n", r);         \
-}
-
-#define MTX_UNLOCK(m)                           \
-if ((r = pthread_mutex_unlock(m)) != 0) {       \
-    log_die("mtx unlock error:  %d\n", r);      \
-}
-
-#define UNLOCK(m, l)				\
-if (*m->cfgtype_p != TYPE_2) {			\
-    MTX_UNLOCK(&l->mtx_lock);			\
-} else {					\
-    RW_UNLOCK(&l->rw_lock);			\
-}
-
-#define LOCK(m, l)				\
-if (*m->cfgtype_p != TYPE_2) {			\
-    MTX_LOCK(&l->mtx_lock);			\
-} else if (*m->cfgtype_p == TYPE_2) {		\
-    RD_LOCK(&l->rw_lock);			\
-} else	{					\
-    printf("THE NO CASE\n");			\
+#define IS_TYPE2(i)				\
+if (i->cfgtype_p == TYPE_2)			\
+    return TRUE;				\
+else						\
+    return FALSE;				\
 }
 
 #define CNT_UPDATE(a, b)			\
@@ -232,6 +199,7 @@ int rbuf_writeto(struct io_params *iop)
 		    MTX_UNLOCK(&w_ptr->mtx_lock);
 		    CNT_UPDATE(iop, w_ptr->len);
 		    w_ptr = w_ptr->next;
+		    iop->w_ptr = w_ptr;
 		    continue;
 		} else if ((r = do_rderr(iop, w_ptr)) < 0) {
 			return r;
@@ -244,6 +212,7 @@ int rbuf_writeto(struct io_params *iop)
 		    RW_UNLOCK(&w_ptr->rw_lock);
 		    CNT_UPDATE(iop, w_ptr->len);
 		    w_ptr = w_ptr->next;
+		    iop->w_ptr = w_ptr;
 		    continue;
 		} else if ((r = do_rderr(iop, w_ptr)) < 0) {
 			return r;
@@ -259,6 +228,9 @@ int rbuf_readfrom(struct io_params *iop)
 	ssize_t			nw;
 	char			*lptr;
 
+	r_ptr = iop->r_ptr;
+
+	nw = 0;
 	r_ptr = set_rbuf_lock(iop);
 
 	if (*iop->cfgtype_p != TYPE_2) {
@@ -272,7 +244,7 @@ int rbuf_readfrom(struct io_params *iop)
 			MTX_UNLOCK(&r_ptr->mtx_lock);
 			CNT_UPDATE(iop, nw);
 			r_ptr = r_ptr->next;
-			break;
+			iop->r_ptr = iop->r_ptr;
 		    } else if (nw < r_ptr->len && nw > 0) {
 			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
 			continue;
@@ -292,6 +264,7 @@ int rbuf_readfrom(struct io_params *iop)
 			RW_UNLOCK(&r_ptr->rw_lock);
 			CNT_UPDATE(iop, nw);
 			r_ptr = r_ptr->next;
+			iop->r_ptr = r_ptr;
 			break;
 		    } else if (nw < r_ptr->len && nw > 0) {
 			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
@@ -302,6 +275,8 @@ int rbuf_readfrom(struct io_params *iop)
 		}
 	    }
 	}
+
+	pthread_exit(NULL);
 }
 
 int rbuf_dgram_writeto(struct io_params *iop)
@@ -405,9 +380,6 @@ int rbuf_dgram_readfrom(struct io_params *iop)
 	}
 }
 
-
-
-
 int rbuf_t3_tlsreadfrom(struct io_params *iop)
 {
         struct rbuf_entry 	*r_ptr;
@@ -492,15 +464,18 @@ int rbuf_t3_readfrom(struct io_params *iop)
 
 struct rbuf_entry *new_rbuf(int t, int sz)
 {
-	int i;
+	int i, r;
 	struct rbuf_entry *e, *prev_ptr, *head;
 	pthread_mutexattr_t mtx_attrs;
 	pthread_rwlockattr_t rwlock_attrs;
 
-	if (t == TYPE_2)
+	if (t == TYPE_2) {
 	    pthread_rwlockattr_init(&rwlock_attrs);
-	else
+	} else {
 	    pthread_mutexattr_init(&mtx_attrs);
+	    if ((r = pthread_mutexattr_settype(&mtx_attrs, PTHREAD_MUTEX_ERRORCHECK)) != 0)
+		log_syserr("ATTR SETTYPE FAILED: %d\n", r);
+	}
 
 	prev_ptr = NULL;
 
@@ -531,15 +506,23 @@ struct rbuf_entry *new_rbuf(int t, int sz)
 	return head;
 }
 
-void free_rbuf(struct rbuf_entry *rbuf)
+void free_rbuf(struct io_params *iop)
 {
 	int i;
 	struct rbuf_entry *rb, *rb_nxt;
-	rb = rbuf;
+	rb = iop->rbuf_p;
 
 	/* FREE LIST OF BUFFERS */
 	for (i = 1; i < 65; i++) {
 	    rb_nxt = rb->next;
+	    if (*iop->cfgtype_p != TYPE_2) {
+		pthread_mutex_destroy(&rb->mtx_lock);
+	    } else {
+		pthread_rwlock_destroy(&rb->rw_lock);
+	    }
+
+	    free(rb->line);
+
 	    free(rb);
 	    rb = rb_nxt;
 	}
@@ -556,8 +539,9 @@ int io_error(struct io_params *iop, int e, int n)
 	struct sock_param	*sop;
 	sop = iop->sock_data;
 
-	if (n == 0) /* zero bytes read/written */
+	if (n == 0) {/* zero bytes read/written */
 	    return 0;
+	}
 
 	if (is_netsock(iop) && sop->tls == TRUE) {
 	    if (n == TLS_WANT_POLLIN || \
@@ -606,9 +590,29 @@ void rbuf_locksync(struct io_params *iop)
         MTX_UNLOCK(&iop->listlock);
 }
 
-int do_rderr(struct io_params *iop, struct rbuf_entry *rb)
+struct rbuf_entry *set_rbuf_lock(struct io_params *iop)
 {
 	int	r;
+
+	MTX_LOCK(&iop->listlock);
+        while (*iop->listready == 0)
+                pthread_cond_wait(&iop->readable, &iop->listlock);
+        MTX_UNLOCK(&iop->listlock);
+	LOCK(iop, iop->r_ptr);
+
+	return iop->r_ptr;
+}
+
+int do_rderr(struct io_params *iop, struct rbuf_entry *rb)
+{
+	int	r, n;
+
+	MTX_LOCK(&sighupstat_lock);
+	n = SIGHUP_STAT;
+	MTX_UNLOCK(&sighupstat_lock);
+	if (n) { 	/* WE'RE SIGHUP'D */
+	    return -2;
+	}
 
 	if (rb->len == 0 && iop->io_type == TCP_SOCK) { /* SOCKET CLOSED */
 	    do_close(iop, rb);
@@ -643,7 +647,14 @@ int do_rderr(struct io_params *iop, struct rbuf_entry *rb)
 
 int do_wrerr(struct io_params *iop, struct rbuf_entry *rb)
 {
-	int r;
+	int r, n;
+
+	MTX_LOCK(&sighupstat_lock);
+	n = SIGHUP_STAT;
+	MTX_UNLOCK(&sighupstat_lock);
+
+	if (n) /* WE'RE SIGHUP'D */
+	    return -2;
 
 	if (rb->len == 0) {
 	    sleep_unlocked(iop, 3, rb);
@@ -673,8 +684,6 @@ int do_poll(struct io_params *iop)
 	else
 	    pfd[0].events = POLLWRNORM;
 
-	printf("Calling POLL for desc: %d path: %s\n", iop->io_fd, iop->path);
-
 	if (poll(pfd, 1, INFTIM) == -1) {
 	    printf("poll() error: %s\n", strerror(errno));
 	    exit(-1);
@@ -702,17 +711,6 @@ void sleep_unlocked(struct io_params *iop, int n, struct rbuf_entry *rb)
 	LOCK(iop, rb);
 }
 
-struct rbuf_entry *set_rbuf_lock(struct io_params *iop)
-{
-	int	r;
-
-	if (*iop->listready == 0)
-	    rbuf_locksync(iop);
-
-	LOCK(iop, iop->r_ptr);
-	return iop->r_ptr;
-}
-
 void do_close(struct io_params *iop, struct rbuf_entry *rb)
 {
 	struct sock_param	*sop;
@@ -725,12 +723,6 @@ void do_close(struct io_params *iop, struct rbuf_entry *rb)
 	    tls_close(sop->tls_ctx);
 	    tls_free(sop->tls_ctx);
 	}
-
-	/* SAVE LOCATION OF RBUF PTRS */
-	if (is_src(iop))
-	    iop->w_ptr = rb;
-	else
-	    iop->r_ptr = rb;
 
 	if (is_dst(iop) || (is_src(iop) && iop->io_type == PIPE))
 	    UNLOCK(iop, rb);
@@ -771,3 +763,77 @@ void report_close_error(struct io_params *iop)
 	}
 }
 
+void close_desc(struct io_params *iop)
+{
+	struct sock_param	*sop;
+
+	sop = iop->sock_data;
+
+	if (iop->io_type != PIPE || iop->io_type != SSH) {
+	    close(iop->io_fd);
+	}
+
+	if (iop->io_type == SSH) {
+	    ssh_disconnect(sop->ssh_s);
+	    ssh_free(sop->ssh_s);
+	}
+
+	if (iop->io_type == PIPE) {
+	    if (kill(iop->pipe_cmd_pid, SIGTERM) != 0)
+		log_syserr("kill() failed for %s\n", iop->pipe_cmd);
+
+	    close(iop->io_fd);
+	}
+}
+
+void release_locks(void *arg)
+{
+	struct iop1_params	*iop1;
+	struct io_params	*iop;
+	struct rbuf_entry	*rb;
+	int			r;
+
+	iop = (struct io_params *)arg;
+
+	if (is_src(iop))
+	    rb = iop->w_ptr;
+	else
+	    rb = iop->r_ptr;
+
+	if (is_src(iop)) {
+	    if (rb->len <= 0)
+		rb->len = 1;
+
+	    if (*iop->listready == 0) {
+		MTX_LOCK(&iop->listlock);
+		if (*iop->listready == 0) {
+		    *iop->listready = 1;
+		    MTX_UNLOCK(&iop->listlock);
+
+		    /* SIGNAL WRITE THREAD */
+		    pthread_cond_signal(&iop->readable);
+		}
+	    }
+
+	    LIST_FOREACH(iop1, iop->iop1_p, io_paths)
+		close(iop1->iop->io_fd);
+
+	    if (pthread_mutex_unlock(&rb->mtx_lock) != 0) {
+		log_die("mutex unlock error\n");
+	    }
+	} else {
+	    if (*iop->cfgtype_p != TYPE_2) {
+		r = pthread_mutex_lock(&rb->mtx_lock);
+		if (r == 0 || r == EDEADLK) {
+		    pthread_mutex_unlock(&rb->mtx_lock);
+		} else {
+		    printf("TRYLOCK-->: %d\n", r);
+		}
+	    } else {
+		r = pthread_rwlock_tryrdlock(&rb->rw_lock);
+		if (r == EDEADLK || r == 0)
+		    pthread_rwlock_unlock(&rb->rw_lock);
+	    }
+	}
+	printf("cleanup handler exiting for %s\n", iop->path);
+}

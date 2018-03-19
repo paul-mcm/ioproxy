@@ -40,6 +40,49 @@
 
 #define BUFF_SIZE 1024
 
+extern pthread_mutex_t sighupstat_lock;
+
+#define RD_LOCK(m)                              \
+if ((r = pthread_rwlock_rdlock(m)) != 0) {      \
+    log_die("rdlock error: %d\n", r);           \
+}
+
+#define WR_LOCK(m)                              \
+if ((r = pthread_rwlock_wrlock(m)) != 0) {      \
+    log_die("wrlock error: %d\n", r);           \
+}
+
+#define RW_UNLOCK(m)                            \
+if ((r = pthread_rwlock_unlock(m)) != 0) {      \
+    log_die("rwlock unlock: %d\n", r);          \
+}
+
+#define MTX_LOCK(m)                             \
+if ((r = pthread_mutex_lock(m)) != 0) {         \
+    log_die("mtx lock error: %d\n", r);         \
+}
+
+#define MTX_UNLOCK(m)                           \
+if ((r = pthread_mutex_unlock(m)) != 0) {       \
+    log_die("mtx unlock error:  %d\n", r);      \
+}
+
+#define UNLOCK(m, l)				\
+if (*m->cfgtype_p != TYPE_2) {			\
+    MTX_UNLOCK(&l->mtx_lock);			\
+} else {					\
+    RW_UNLOCK(&l->rw_lock);			\
+}
+
+#define LOCK(m, l)				\
+if (*m->cfgtype_p != TYPE_2) {			\
+    MTX_LOCK(&l->mtx_lock);			\
+} else if (*m->cfgtype_p == TYPE_2) {		\
+    RD_LOCK(&l->rw_lock);			\
+} else	{					\
+    printf("THE NO CASE\n");			\
+}
+
 struct rbuf_entry *new_rbuf();
 
 struct rbuf_entry { 
@@ -63,7 +106,7 @@ int rbuf_t3_readfrom(struct io_params *);
 int rbuf_t3_tlsreadfrom(struct io_params *);
 
 struct rbuf_entry *new_rbuf(int, int);
-void free_rbuf(struct rbuf_entry *);
+void free_rbuf(struct io_params *);
 void sleep_unlocked(struct io_params *, int, struct rbuf_entry *);
 
 int io_error(struct io_params *, int, int);
@@ -75,5 +118,7 @@ void rbuf_locksync0(struct io_params *);
 void rbuf_locksync(struct io_params *);
 
 void do_close(struct io_params *, struct rbuf_entry *);
+void close_desc(struct io_params *);
+void release_locks(void *);
 
 #endif

@@ -14,18 +14,20 @@
  */
 
 #include "ioproxy.h"
-void	*iocfg_manager(void *);
-void	*io_thread(void *);
-
 int			debug;
 char			*prog;
 char			*config_file = "/etc/ioproxyd.conf";
 volatile sig_atomic_t	SIGHUP_STAT;
 volatile sig_atomic_t	SIGTERM_STAT;
+pthread_mutex_t		sighupstat_lock;
+pthread_cond_t		thrd_stat;
+int			thread_cnt;
+pthread_barrier_t	thrd_b;
+void			*io_thread(void *);
 
 int main(int argc, char *argv[])
 {
-	pthread_t		sigterm_tid, sighup_tid, tid;
+	pthread_t		sigterm_tid, tid;
 	pthread_attr_t		dflt_attrs;
 	struct io_cfg		*iocfg;
 	sigset_t		sig_set;
@@ -95,6 +97,7 @@ int main(int argc, char *argv[])
 
 	SIGTERM_STAT = FALSE;
 	SIGHUP_STAT  = FALSE;
+	sighupstat_lock = PTHREAD_MUTEX_INITIALIZER;
 
 	ssh_threads_set_callbacks(ssh_threads_get_pthread());
 	ssh_init();
@@ -115,17 +118,10 @@ int main(int argc, char *argv[])
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
 	    show_config(iocfg);
 
-        if ((r = pthread_attr_init(&dflt_attrs)) != 0)
-            log_die("Error initing thread attrs: %d\n", r);
+	if (pthread_create(&tid, NULL, iocfg_manager, (void *)&all_cfg) != 0)
+	    log_die("error pthread_create()");
 
-	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
-		if (pthread_create(&tid, &dflt_attrs, iocfg_manager, (void *)iocfg) != 0)
-                	log_ret("error pthread_create: ");
-
-	if (pthread_create(&sigterm_tid, &dflt_attrs, sigterm_thrd, NULL) != 0)
-		log_die("error pthread_create()");
-
-	if (pthread_create(&sighup_tid, &dflt_attrs, sighup_thrd, NULL) != 0)
+	if (pthread_create(&sigterm_tid, NULL, sigterm_thrd, NULL) != 0)
 		log_die("error pthread_create()");
 
 	/* BLOCK */
@@ -147,6 +143,7 @@ void iop_setup(struct io_cfg *iocfg)
 	    /* AT THIS STAGE, iop0_paths HAS ONLY 1 MEMBER */
 	    iop0 = LIST_FIRST(&iocfg->iop0_paths);
 	    iop = iop0->iop;
+	    iop->iop1_p = &iop0->io_paths;
 
 	    pthread_cond_init(&iop->readable, NULL);
 	    iop0->iop->listlock = PTHREAD_MUTEX_INITIALIZER;
@@ -246,23 +243,49 @@ void iop_setup(struct io_cfg *iocfg)
 void *iocfg_manager(void *arg)
 {
 	struct io_cfg		*iocfg;
+	struct all_cfg_list	*acfg;
 	struct iop0_params	*iop0;
 	pthread_attr_t		dflt_attrs;
+	pthread_t		sighup_tid;
+	int			n;
 
-	iocfg = (struct io_cfg *)arg;
+	acfg = (struct all_cfg_list *)arg;
 
-        if (pthread_attr_init(&dflt_attrs) != 0)
-		log_die("Error initing thread attrs\n");
+	if (pthread_cond_init(&thrd_stat, NULL) != 0)
+	    log_die("pthread_cond_init() error\n");
 
-	LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths) {
-	    if (pthread_create(&iop0->iop->tid, &dflt_attrs, iop0_thrd, (void *)iop0) != 0)
-		log_die("error pthread_create: %s", strerror(errno));
+	if (pthread_attr_init(&dflt_attrs) != 0)
+	    log_die("error initing attrs\n");
+
+	if (pthread_attr_setdetachstate(&dflt_attrs, PTHREAD_CREATE_DETACHED) != 0)
+	    log_die("error setting detach state\n");
+
+	for (;;) {
+	    thread_cnt = 1;
+	    SIGHUP_STAT = FALSE;
+
+	    if (pthread_create(&sighup_tid, NULL, sighup_thrd, NULL) != 0)
+		log_die("error pthread_create()");
+
+	    n = 0;
+	    LIST_FOREACH(iocfg, acfg, io_cfgs) {
+		LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths)
+		    n++;
+	    }
+
+	    if (pthread_barrier_init(&thrd_b, NULL, n) != 0)
+		log_die("BARIER INIT ERROR\n");
+
+	    LIST_FOREACH(iocfg, acfg, io_cfgs) {
+		LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths) {
+		    if (pthread_create(&iop0->iop->tid, &dflt_attrs, iop0_thrd, (void *)iop0) != 0)
+			log_die("error pthread_create: %s", strerror(errno));
+		}
+	    }
+
+	    pthread_join(sighup_tid, NULL);
+	    pthread_barrier_destroy(&thrd_b);
 	}
-/*	FOR TYPE 3: 
- *	OPEN DESC FOR iop0
- *	COPY DESC TO ALL OTHER io_params
- *	CALL THREAD FOR EACH iop_param
- */
 }
 
 void *iop0_thrd(void *arg)
@@ -272,29 +295,43 @@ void *iop0_thrd(void *arg)
 	struct iop0_params	*iop0;
 	struct io_params	*iop;
 	pthread_attr_t		dflt_attrs;
-	int			r;
+	int			cnt, r;
 
 	struct io_cfg		*iocfg;
 	iop0 = (struct iop0_params *)arg;
 	iop = iop0->iop;
 
-        if (pthread_attr_init(&dflt_attrs) != 0)
-		log_die("Error initing thread attrs\n");
-
-	if (pthread_create(&iop->tid, &dflt_attrs, io_thread, (void *)iop) != 0)
+	if (pthread_create(&iop->tid, NULL, io_thread, (void *)iop) != 0)
 	    log_die("pthread_create() error");
 
 	LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
-	    if (pthread_create(&iop1->iop->tid, &dflt_attrs, iop1->iop->io_thread, (void *)iop1->iop) != 0)
+	    if (pthread_create(&iop1->iop->tid, NULL, iop1->iop->io_thread, (void *)iop1->iop) != 0)
 		log_die("error pthread_create()");
 	}
 
 	r = pthread_join(iop->tid, NULL);
-	log_msg("pthread_join() returned\n");
-	/* XXX SHOULDN'T WE KILL THE OTHER THREADS
-	 * FOR THIS CONFIG BEFORE EXITING? 
-	 */
-	pthread_exit(NULL);
+	log_msg("pthread_join() returned for %s\n", iop->path);
+
+	LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
+	    printf("Calling join for %s\n", iop1->iop->path);
+	    pthread_join(iop1->iop->tid, NULL);
+	    printf("join returned for %s\n", iop1->iop->path);
+	}
+
+	/* ALL I/O THREADS SHOULD BE GONE BY THIS POINT */
+	if (SIGHUP_STAT == TRUE) {
+	    if (pthread_barrier_wait(&thrd_b) == PTHREAD_BARRIER_SERIAL_THREAD) {
+		pthread_mutex_lock(&sighupstat_lock);
+
+		thread_cnt = 0;
+
+		pthread_mutex_unlock(&sighupstat_lock);
+		if (pthread_cond_signal(&thrd_stat) != 0)
+		    printf("ERROR sending SIGHUP thread signal\n");
+	    }
+	}
+
+	pthread_exit((void *)0);
 }
 
 void *io_t3_thread(void *arg)
@@ -306,7 +343,7 @@ void *io_t3_thread(void *arg)
 	iop = (struct io_params *)arg;
 	
 	set_thrd_sigmask();
-	pthread_cleanup_push(release_mtx, iop);
+/*	pthread_cleanup_push(release_mtx, iop); */
 
 	log_msg("Running io_t3_thread %s\n", iop->path);
 
@@ -346,11 +383,12 @@ void *io_t3_thread(void *arg)
 
 	log_msg("io_thread returning for %s\n", iop->path);
 	pthread_exit((void *)0);
-	pthread_cleanup_pop(0);
+/*	pthread_cleanup_pop(0); */
 }
 
 void *io_thread(void *arg)
 {
+	struct iop1_params	*iop1;
 	struct io_params	*iop;
 	struct sock_param	*sop;
 	int			r;
@@ -360,6 +398,7 @@ void *io_thread(void *arg)
 
 	set_thrd_sigmask();
 
+	pthread_cleanup_push(release_locks, arg);
 	for (;;) {
 	    if (iop->io_fd < 0) {
 		if (is_netsock(iop)) {
@@ -437,30 +476,8 @@ void *io_thread(void *arg)
 
 	log_msg("io_thread returning for %s\n", iop->path);
 	pthread_exit((void *)0);
-}
+	pthread_cleanup_pop(0);
 
-void release_mtx(void *arg)
-{
-	struct io_params *iop;
-	int		 r;
-
-	iop = (struct io_params *)arg;
-
-	log_msg("Cleanup called for %s\n", iop->path);
-/*
-*	if ((r = pthread_mutex_trylock(&iop->rbuf_p->lock)) != 0) {
-*		if (r != EBUSY)
-*			log_die("pthread_mutex_trylock() error: %d\n", r);
-*	} else {
-*		log_msg("trylock returned %d\n", r);
-*	}
-*/
-
-	log_msg("Unlokcking MTX\n");
-	if ((r = pthread_mutex_unlock(&iop->rbuf_p->mtx_lock)) != 0)
-		log_msg("unlock error: %d\n", r);
-
-	log_msg("release_mtx() returning ro %s\n", iop->path);
 }
 
 int validate_ftype(struct io_params *iop, struct stat *s)
@@ -480,19 +497,6 @@ int validate_ftype(struct io_params *iop, struct stat *s)
 		return -1;
 	}
 	return 0;
-}
-
-void ioparam_list_kill(struct io_cfg *iocfg)
-{	
-	struct iop0_params	*iop0;
-	struct iop1_params	*iop1;
-	
-	LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths) {
-		LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
-			close(iop1->iop->io_fd);
-			pthread_cancel(iop1->iop->tid);
-		}
-	}	
 }
 
 void * sigterm_thrd(void *arg)
@@ -580,33 +584,86 @@ void copy_io_params(struct io_params *src, struct io_params *dst)
 
 void * sighup_thrd(void *a)
 {
-	int             sig;
-	sigset_t        sig_set;
-	struct io_cfg	*iocfg;
+	int			sig;
+	sigset_t		sig_set;
+	struct io_cfg		*iocfg;
+	struct iop0_params 	*iop0;
+	struct iop1_params	*iop1;
+	int			n, r;
 
-	for (;;) {
-	    sigemptyset(&sig_set);
-	    sigaddset(&sig_set, SIGHUP);
+	pthread_mutex_lock(&sighupstat_lock);
+	SIGHUP_STAT = FALSE;
+	pthread_mutex_unlock(&sighupstat_lock);
 
-	    pthread_sigmask(SIG_BLOCK, &sig_set, NULL);
+	sigemptyset(&sig_set);
+	sigaddset(&sig_set, SIGHUP); /* SIGHUP BLOCKED IN main() */
 
-	    sigwait(&sig_set, &sig);
+	sigwait(&sig_set, &sig);
+	pthread_sigmask(SIG_BLOCK, &sig_set, NULL);
 
-	    SIGHUP_STAT = TRUE;
+	pthread_mutex_lock(&sighupstat_lock);
+	SIGHUP_STAT = TRUE;
+	pthread_mutex_unlock(&sighupstat_lock);
 
-	    /* REREAD CONFIG FILE */
-	    LIST_INIT(&new_cfg);
-
-	    read_config((struct all_cfg_list *)&new_cfg, config_file);
-
-	    LIST_FOREACH(iocfg, (struct all_cfg_list *)&new_cfg, io_cfgs)
-		iop_setup(iocfg);
-
-	    LIST_FOREACH(iocfg, &new_cfg, io_cfgs)
-		validate_cfg(iocfg);
-
-	    LIST_FOREACH(iocfg, &new_cfg, io_cfgs)
-		show_config(iocfg);
+	LIST_FOREACH(iocfg, &all_cfg, io_cfgs) { 
+	    iop0 = LIST_FIRST(&iocfg->iop0_paths);
+	    close_desc(iop0->iop);
+	    sleep(1);
+ 	    pthread_cancel(iop0->iop->tid);
 	}
+
+	MTX_LOCK(&sighupstat_lock);
+	while (thread_cnt == 1) {
+	    pthread_cond_wait(&thrd_stat, &sighupstat_lock);
+	}
+	MTX_UNLOCK(&sighupstat_lock);
+
+	/* EMPTY CFG LIST HERE */
+	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
+	    free_iocfg(iocfg);
+
+	while (!LIST_EMPTY(&all_cfg)) {
+	    iocfg = LIST_FIRST(&all_cfg);
+	    LIST_REMOVE(iocfg, io_cfgs);
+	    free(iocfg);
+	}
+
+	read_config(&all_cfg, config_file);
+
+	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
+	    iop_setup(iocfg);
+
+	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
+	    validate_cfg(iocfg);  /* XXX COULD CAUSE PROG TO EXIT. NEEDS FIXING */
+
+	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
+	    show_config(iocfg);
+
+	pthread_exit(NULL);
 }
 
+int cancel_threads(struct iop0_params *iop0)
+{
+	struct iop1_params	*iop1;
+	int			 n, r;
+
+	n = 0;
+
+	sleep(1);  /* Give some time for threads to exit themselves */
+
+	LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
+	    if ((r = pthread_cancel(iop1->iop->tid)) != 0) {
+		log_msg("pthread_cancel() failed: %d\n", r);
+		continue;
+	    }
+	}
+	LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
+	    if (pthread_join(iop1->iop->tid, NULL) == 0) {
+		log_msg("pthread_join() returned for : %s\n", iop1->iop->path);
+	    } else {
+		printf("pthread_join() returned badly!\n");
+	    }
+	    n++;
+	}
+	return n;
+}
