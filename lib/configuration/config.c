@@ -308,6 +308,7 @@ void print_config_params(struct io_params *iop)
 	printf("io_fd ptr: %p\n", iop->io_fd);
 	printf("fd_lock ptr: %p\n", iop->fd_lock);
 	printf("buf_sz: %d\n", iop->buf_sz);
+	printf("iop1 ptr: %p\n", iop->iop1_p);
 
 	if (iop->pipe_cmd != NULL)
 	    printf("pipe_cmd:\t\t%s\n", iop->pipe_cmd);
@@ -362,8 +363,8 @@ int validate_path(char *path)
 	struct stat     s;
 
         if (stat(path, &s) != 0) {
-            printf("Error for file %s: %s\n", path, strerror(errno));
-            return -1;
+	    log_syserr("Error for file %s: %s\n", path, strerror(errno));
+	    return -1;
         } else {
             return 0;
         }
@@ -524,18 +525,23 @@ void free_iocfg(struct io_cfg *iocfg)
 	struct io_params	*iop;
 	int 	r;
 
+	LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths) {
+	    LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
+		free_iop(iop1->iop);
+	    }
+	    free_iop0(iop0);
+	}
+
 	while (!LIST_EMPTY(&iocfg->iop0_paths)) {
 	    iop0 = LIST_FIRST(&iocfg->iop0_paths);
-
 	    while (!LIST_EMPTY(&iop0->io_paths)) {
 		iop1 = LIST_FIRST(&iop0->io_paths);
 		LIST_REMOVE(iop1, io_paths);
-		free_iop(iop1->iop);
 		free(iop1);
 	    }
 
 	    LIST_REMOVE(iop0, iop0_paths);
-	    free_iop0(iop0);
+	    free(iop0);
 	}
 }
 

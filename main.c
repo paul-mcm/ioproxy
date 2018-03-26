@@ -135,7 +135,7 @@ void iop_setup(struct io_cfg *iocfg)
 	struct io_params	*iop;
 	struct iop0_params	*iop0, *newiop0;
 	struct iop1_params	*iop1, *newiop1;
-	pthread_mutexattr_t	mxattrs;
+	pthread_mutexattr_t	mtx_attrs;
 	int			r;
 
 	if (iocfg->cfg_type == TYPE_1 || iocfg->cfg_type == TYPE_2) {
@@ -169,8 +169,14 @@ void iop_setup(struct io_cfg *iocfg)
 
 	} else if (iocfg->cfg_type == TYPE_3) {
 	    int i = 0;
+
+	    pthread_mutexattr_init(&mtx_attrs);
+	    if ((r = pthread_mutexattr_settype(&mtx_attrs, PTHREAD_MUTEX_ERRORCHECK)) \
+		!= 0)
+		log_syserr("ATTR SETTYPE FAILED: %d\n", r);
+
 	    /* AT THIS POINT, ONLY ONE ITEM IN LIST */
-	    iop0 = LIST_FIRST(&iocfg->iop0_paths); 
+	    iop0 = LIST_FIRST(&iocfg->iop0_paths);
 
 	    LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
 		newiop0 = NULL;
@@ -185,7 +191,16 @@ void iop_setup(struct io_cfg *iocfg)
 		copy_io_params(iop1->iop, newiop0->iop); 
 		copy_io_params(iop0->iop, newiop1->iop); 
 
-		newiop0->iop->fd_lock = PTHREAD_MUTEX_INITIALIZER;
+		if ((newiop1->iop->path = malloc(strlen(iop0->iop->path) + 1)) == NULL)
+		    log_syserr("malloc() error\n");
+
+		strlcpy(newiop1->iop->path, iop0->iop->path, strlen(iop0->iop->path) + 1);
+
+		newiop0->iop->iop1_p = &iop0->io_paths;
+
+		if (pthread_mutex_init(&newiop1->iop->fd_lock, &mtx_attrs) != 0)
+		    log_die("error init'ing mutex\n");
+
 		newiop0->iop->listlock = PTHREAD_MUTEX_INITIALIZER;
 
 		pthread_cond_init(&newiop0->iop->readable, NULL);
@@ -214,7 +229,6 @@ void iop_setup(struct io_cfg *iocfg)
 
 		LIST_INSERT_HEAD(&newiop0->io_paths, newiop1, io_paths);
 		LIST_INSERT_HEAD(&iocfg->iop0_paths, newiop0, iop0_paths);
-
 	    }
 
 	    LIST_REMOVE(iop0, iop0_paths);
@@ -233,11 +247,11 @@ void iop_setup(struct io_cfg *iocfg)
             }
 
  	    LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths) {		    
-		iop1 = LIST_FIRST(&iop0->io_paths); /* ONLY 1 IN LIST */
+		iop1 = LIST_FIRST(&iop0->io_paths); /* ONLY 1 UNIQUE IN LIST */
 		iop1->iop->fd_lock = newiop1->iop->fd_lock;
 		iop1->iop->iofd_p  = newiop1->iop->iofd_p;
 	    }
-	}	
+	}
 }
 
 void *iocfg_manager(void *arg)
@@ -310,24 +324,17 @@ void *iop0_thrd(void *arg)
 	}
 
 	r = pthread_join(iop->tid, NULL);
-	log_msg("pthread_join() returned for %s\n", iop->path);
 
-	LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
-	    printf("Calling join for %s\n", iop1->iop->path);
-	    pthread_join(iop1->iop->tid, NULL);
-	    printf("join returned for %s\n", iop1->iop->path);
-	}
+	r = cancel_threads(iop0);
 
 	/* ALL I/O THREADS SHOULD BE GONE BY THIS POINT */
 	if (SIGHUP_STAT == TRUE) {
 	    if (pthread_barrier_wait(&thrd_b) == PTHREAD_BARRIER_SERIAL_THREAD) {
 		pthread_mutex_lock(&sighupstat_lock);
-
 		thread_cnt = 0;
-
 		pthread_mutex_unlock(&sighupstat_lock);
 		if (pthread_cond_signal(&thrd_stat) != 0)
-		    printf("ERROR sending SIGHUP thread signal\n");
+		    log_syserr("ERROR sending SIGHUP thread signal\n");
 	    }
 	}
 
@@ -336,54 +343,87 @@ void *iop0_thrd(void *arg)
 
 void *io_t3_thread(void *arg)
 {
+	/* THIS IF FOR TYPE 3 DESTINATIONS ONLY
+	 * NB: iop->drn IS ALWAYS 'dst';
+	 * USES A MTX LOCK TO OBVIATE INTERLEAVED DATA WRITTEN TO COMMON
+	 * DESCRIPTOR BY DIFFERENT THREADS (NOT NECESSARY FOR DGRAM
+	 * SOCKETS)
+	 */
+
+	struct iop1_params	*iop1;
 	struct io_params	*iop;
+	struct sock_param	*sop;
 	int			r;
 	sigset_t		sig_set;
 
 	iop = (struct io_params *)arg;
-	
-	set_thrd_sigmask();
-/*	pthread_cleanup_push(release_mtx, iop); */
+	sop = iop->sock_data;
 
-	log_msg("Running io_t3_thread %s\n", iop->path);
+	set_thrd_sigmask();
+
+	pthread_cleanup_push(release_locks, iop);
 
 	for (;;) {
 	    if (*iop->iofd_p < 0) {
 		pthread_mutex_lock(&iop->fd_lock);
 
-		if (*iop->iofd_p < 0) {
-		    log_msg("opening fd for %s\n", iop->path);
-		    if ((*iop->iofd_p = open_desc(iop)) < 0) {
-			log_msg("open error. Sleeping...\n");
-			sleep(10);
+		if (*iop->iofd_p > 0) {
+		    pthread_mutex_unlock(&iop->fd_lock);
+		} else {
+
+ 		    if (is_netsock(iop))
+			log_msg("opening fd for %s\n", sop->hostname);
+		    else
+			log_msg("opening dscrptr for %s\n", iop->path);
+
+		    r = open_desc(iop);
+		    if (r == -2) { /* NON RECOVERABLE ERROR */
 			pthread_mutex_unlock(&iop->fd_lock);
+			break;
+		    } else if (r <= 0) {
+			log_msg("open error. Sleeping...\n");
+			pthread_mutex_unlock(&iop->fd_lock);
+			sleep(10);
 			continue;
 		    } else {
-			log_msg("Releasing lock: %s Desc: %d\n\n", iop->path, *iop->iofd_p);
+			*iop->iofd_p = r;
 			pthread_mutex_unlock(&iop->fd_lock);
 		    }
-		} else {
-		    log_msg("Releasing lock: %s Desc: %d\n\n", iop->path, *iop->iofd_p);
-		    pthread_mutex_unlock(&iop->fd_lock);
 		}
 	    }
 
-	    if (is_src(iop))
-		r = rbuf_writeto(iop);
-	    else if (use_tls(iop))
+	    if (use_tls(iop)) {
 		r = rbuf_t3_tlsreadfrom(iop);
-	    else
+	    } else if (is_sock(iop) && sop->sockio == DGRAM) {
+		r = rbuf_dgram_readfrom(iop);
+	    } else {
 		r = rbuf_t3_readfrom(iop);
-
-	    if (SIGTERM_STAT == TRUE) {
-		log_msg("SIGTERM_STAT is TRUE\n");
-		break;
 	    }
+
+	    /* ONLY HERE IF DESCRIPTOR CLOSED */
+	    if (r == -2)
+		break;
+
+	    if (is_netsock(iop) || iop->io_type == FIFO) {
+		close_desc(iop);
+		*iop->iofd_p = -1;
+	    }
+
+	    if (SIGTERM_STAT == TRUE)
+		break;
+	    else if (SIGHUP_STAT == TRUE)
+		break;
 	}
 
-	log_msg("io_thread returning for %s\n", iop->path);
+	if (is_netsock(iop) || iop->io_type == FIFO)
+	    close_desc(iop);
+
+	if (iop->io_type == UNIX_SOCK && unlink(iop->path) != 0)
+	    log_ret("unlink error: %s, %s\n", iop->path);	
+
+	log_msg("T3 io_thread returning for %s %p\n", iop->path, iop);
 	pthread_exit((void *)0);
-/*	pthread_cleanup_pop(0); */
+	pthread_cleanup_pop(0);
 }
 
 void *io_thread(void *arg)
@@ -451,33 +491,32 @@ void *io_thread(void *arg)
 		    break;
 
 		if (is_netsock(iop) || iop->io_type == FIFO) {
-		    close(iop->io_fd);
+		    close_desc(iop);
 		    iop->io_fd = -1;
 		}
 
-		if (SIGTERM_STAT == TRUE) {
-		    log_msg("SIGTERM_STAT is TRUE\n");
+		if (SIGTERM_STAT == TRUE)
 		    break;
-		}
-	    }
+		else if (SIGHUP_STAT == TRUE)
+		    break;	    }
 	}
 
 	if (is_netsock(iop)) {
-	    close(iop->io_fd);
+	    close_desc(iop);
 	    iop->io_fd = -1;
 	}
 
 	if (iop->io_type == PIPE) {
-	    close(iop->io_fd);
+	    close_desc(iop);
 	}
 
 	if (iop->io_type == UNIX_SOCK && unlink(iop->path) != 0)
 	    log_ret("unlinkk error: %s %s\n", iop->path, errno);
 
+	release_locks((void *)iop);
 	log_msg("io_thread returning for %s\n", iop->path);
-	pthread_exit((void *)0);
 	pthread_cleanup_pop(0);
-
+	pthread_exit((void *)0);
 }
 
 int validate_ftype(struct io_params *iop, struct stat *s)
@@ -539,7 +578,7 @@ void terminate(void)
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs) {
 
 		LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths)
-		    close(iop0->iop->io_fd);
+		    close_desc(iop0->iop);
 
 		LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths)
 		    cancel_ioparam(iop0->iop);	
@@ -599,17 +638,25 @@ void * sighup_thrd(void *a)
 	sigaddset(&sig_set, SIGHUP); /* SIGHUP BLOCKED IN main() */
 
 	sigwait(&sig_set, &sig);
+
 	pthread_sigmask(SIG_BLOCK, &sig_set, NULL);
 
 	pthread_mutex_lock(&sighupstat_lock);
 	SIGHUP_STAT = TRUE;
 	pthread_mutex_unlock(&sighupstat_lock);
 
-	LIST_FOREACH(iocfg, &all_cfg, io_cfgs) { 
-	    iop0 = LIST_FIRST(&iocfg->iop0_paths);
-	    close_desc(iop0->iop);
-	    sleep(1);
- 	    pthread_cancel(iop0->iop->tid);
+	LIST_FOREACH(iocfg, &all_cfg, io_cfgs) {
+	    LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths) {
+		LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
+		    close_desc(iop1->iop);
+		}
+		close_desc(iop0->iop);
+
+		/* NEED TO FIGURE OUT WHAT *NEEDS* CANCELLING AND WHAT DOESN'T 
+		* E.G., FIFOS RETURN AFTER DESCRIPTOR CLOSE
+		*/
+		pthread_cancel(iop0->iop->tid);
+	    }
 	}
 
 	MTX_LOCK(&sighupstat_lock);
@@ -661,7 +708,7 @@ int cancel_threads(struct iop0_params *iop0)
 	    if (pthread_join(iop1->iop->tid, NULL) == 0) {
 		log_msg("pthread_join() returned for : %s\n", iop1->iop->path);
 	    } else {
-		printf("pthread_join() returned badly!\n");
+		log_msg("pthread_join() returned badly!\n");
 	    }
 	    n++;
 	}

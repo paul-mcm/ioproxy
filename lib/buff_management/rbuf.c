@@ -429,8 +429,8 @@ int rbuf_t3_readfrom(struct io_params *iop)
 
 	r_ptr = set_rbuf_lock(iop);
 	MTX_LOCK(&iop->fd_lock);
-	
-        for (;;) {
+
+	for (;;) {
 	    lptr = r_ptr->line;
 	    nleft = r_ptr->len;
 
@@ -683,18 +683,17 @@ int do_poll(struct io_params *iop)
 	    pfd[0].events = POLLWRNORM;
 
 	if (poll(pfd, 1, INFTIM) == -1) {
-	    printf("poll() error: %s\n", strerror(errno));
+	    log_syserr("poll() error\n");
 	    exit(-1);
 	}
 
 	if ((pfd[0].revents & (POLLERR|POLLNVAL))) {
-	    log_msg("revents error\n");
-	    exit(-1);
+	    log_msg("revents error; bad descriptor for %s?\n", iop->path);
+	    return -1;
 	} else if (pfd[0].revents & (POLLHUP)) { /* DISCONNECTED */
 	    printf("poll() returned POLLHUP\n");
 		return -1;
 	} else {
-	    printf("poll returned; continuing\n");
 	    return 0;
 	}
 }
@@ -764,23 +763,23 @@ void report_close_error(struct io_params *iop)
 void close_desc(struct io_params *iop)
 {
 	struct sock_param	*sop;
-
+	int			d;
 	sop = iop->sock_data;
 
-	if (iop->io_type != PIPE || iop->io_type != SSH) {
-	    close(iop->io_fd);
-	}
+	if (is_dst(iop) && *iop->cfgtype_p == TYPE_3)
+	    d = *iop->iofd_p;
+	else
+	    d = iop->io_fd;
 
-	if (iop->io_type == SSH) {
+	if (iop->io_type != PIPE || iop->io_type != SSH) {
+	    close(d);
+	} else if (iop->io_type == SSH) {
 	    ssh_disconnect(sop->ssh_s);
 	    ssh_free(sop->ssh_s);
-	}
-
-	if (iop->io_type == PIPE) {
+	} else if (iop->io_type == PIPE) {
 	    if (kill(iop->pipe_cmd_pid, SIGTERM) != 0)
 		log_syserr("kill() failed for %s\n", iop->pipe_cmd);
-
-	    close(iop->io_fd);
+	    close(d);
 	}
 }
 
@@ -801,7 +800,6 @@ void release_locks(void *arg)
 	if (is_src(iop)) {
 	    if (rb->len <= 0)
 		rb->len = 1;
-
 	    if (*iop->listready == 0) {
 		MTX_LOCK(&iop->listlock);
 		if (*iop->listready == 0) {
@@ -813,25 +811,30 @@ void release_locks(void *arg)
 		}
 	    }
 
-	    LIST_FOREACH(iop1, iop->iop1_p, io_paths)
-		close(iop1->iop->io_fd);
-
 	    if (pthread_mutex_unlock(&rb->mtx_lock) != 0) {
 		log_die("mutex unlock error\n");
 	    }
 	} else {
-	    if (*iop->cfgtype_p != TYPE_2) {
+	    if (*iop->cfgtype_p == TYPE_1) {
 		r = pthread_mutex_lock(&rb->mtx_lock);
 		if (r == 0 || r == EDEADLK) {
 		    pthread_mutex_unlock(&rb->mtx_lock);
-		} else {
-		    printf("TRYLOCK-->: %d\n", r);
 		}
-	    } else {
+	    } else if (*iop->cfgtype_p == TYPE_3) {
+		r = pthread_mutex_lock(&iop->fd_lock);
+		if (r == 0 || r == EDEADLK) {
+		    pthread_mutex_unlock(&iop->fd_lock);
+		}
+
+		r = pthread_mutex_lock(&rb->mtx_lock);
+		if (r == 0 || r == EDEADLK) {
+		    pthread_mutex_unlock(&rb->mtx_lock);
+		}
+	    } else { /* TYPE_2 */
 		r = pthread_rwlock_tryrdlock(&rb->rw_lock);
-		if (r == EDEADLK || r == 0)
+		if (r == EDEADLK || r == 0) {
 		    pthread_rwlock_unlock(&rb->rw_lock);
+		}
 	    }
 	}
-	printf("cleanup handler exiting for %s\n", iop->path);
 }
