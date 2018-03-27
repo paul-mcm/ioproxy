@@ -682,7 +682,11 @@ int do_poll(struct io_params *iop)
 	else
 	    pfd[0].events = POLLWRNORM;
 
+#ifdef BSD
 	if (poll(pfd, 1, INFTIM) == -1) {
+#else
+       if (poll(pfd, 1, -1) == -1) {
+#endif
 	    log_syserr("poll() error\n");
 	    exit(-1);
 	}
