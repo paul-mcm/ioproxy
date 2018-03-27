@@ -97,7 +97,8 @@ int main(int argc, char *argv[])
 
 	SIGTERM_STAT = FALSE;
 	SIGHUP_STAT  = FALSE;
-	sighupstat_lock = PTHREAD_MUTEX_INITIALIZER;
+	if (pthread_mutex_init(&sighupstat_lock, NULL) != 0)
+	    log_syserr("mutex init error");
 
 	ssh_threads_set_callbacks(ssh_threads_get_pthread());
 	ssh_init();
@@ -146,7 +147,8 @@ void iop_setup(struct io_cfg *iocfg)
 	    iop->iop1_p = &iop0->io_paths;
 
 	    pthread_cond_init(&iop->readable, NULL);
-	    iop0->iop->listlock = PTHREAD_MUTEX_INITIALIZER;
+	    if (pthread_mutex_init(&iop0->iop->listlock, NULL) != 0)
+		log_syserr("mutex init error");
 
 	    iop0->iop->rbuf_p = new_rbuf(iocfg->cfg_type, iop->buf_sz);
 	    iop0->iop->w_ptr = iop0->iop->rbuf_p;
@@ -201,7 +203,8 @@ void iop_setup(struct io_cfg *iocfg)
 		if (pthread_mutex_init(&newiop1->iop->fd_lock, &mtx_attrs) != 0)
 		    log_die("error init'ing mutex\n");
 
-		newiop0->iop->listlock = PTHREAD_MUTEX_INITIALIZER;
+		if (pthread_mutex_init(&newiop0->iop->listlock, NULL) != 0)
+		    log_syserr("mutex init error");
 
 		pthread_cond_init(&newiop0->iop->readable, NULL);
 		newiop0->iop->listready = malloc(sizeof(int));
