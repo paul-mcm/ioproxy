@@ -67,6 +67,16 @@ if ((r = pthread_mutex_unlock(m)) != 0) {       \
     log_die("mtx unlock error:  %d\n", r);      \
 }
 
+#define FDMTX_LOCK(m)                           \
+if ((r = pthread_mutex_lock(m)) != 0) {         \
+    log_die("mtx lock error:  %d\n", r);        \
+}
+
+#define FDMTX_UNLOCK(m)                         \
+if ((r = pthread_mutex_unlock(m)) != 0) {       \
+    log_die("mtx lock error:  %d\n", r);        \
+}
+
 #define UNLOCK(m, l)				\
 if (*m->cfgtype_p != TYPE_2) {			\
     MTX_UNLOCK(&l->mtx_lock);			\

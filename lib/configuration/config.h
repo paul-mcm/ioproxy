@@ -110,10 +110,10 @@ struct io_params {
 	void *(*io_thread)(void *);
 
 	pthread_t		tid;
-
 	pthread_mutex_t		listlock;	/* s */
 	pthread_cond_t		readable;	/* s */
 	pthread_mutex_t		fd_lock;	/* s */
+	pthread_mutex_t		*fdlock_p;
 	pthread_barrier_t	thrd_b;		/* s */
 	int			buf_sz;
 	int			io_fd;

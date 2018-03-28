@@ -172,11 +172,6 @@ void iop_setup(struct io_cfg *iocfg)
 	} else if (iocfg->cfg_type == TYPE_3) {
 	    int i = 0;
 
-	    pthread_mutexattr_init(&mtx_attrs);
-	    if ((r = pthread_mutexattr_settype(&mtx_attrs, PTHREAD_MUTEX_ERRORCHECK)) \
-		!= 0)
-		log_syserr("ATTR SETTYPE FAILED: %d\n", r);
-
 	    /* AT THIS POINT, ONLY ONE ITEM IN LIST */
 	    iop0 = LIST_FIRST(&iocfg->iop0_paths);
 
@@ -199,9 +194,6 @@ void iop_setup(struct io_cfg *iocfg)
 		strlcpy(newiop1->iop->path, iop0->iop->path, strlen(iop0->iop->path) + 1);
 
 		newiop0->iop->iop1_p = &iop0->io_paths;
-
-		if (pthread_mutex_init(&newiop1->iop->fd_lock, &mtx_attrs) != 0)
-		    log_die("error init'ing mutex\n");
 
 		if (pthread_mutex_init(&newiop0->iop->listlock, NULL) != 0)
 		    log_syserr("mutex init error");
@@ -227,31 +219,36 @@ void iop_setup(struct io_cfg *iocfg)
 		newiop1->iop->listlock 	= newiop0->iop->listlock;
 		newiop1->iop->readable 	= newiop0->iop->readable;
 
-		newiop1->iop->fd_lock	= newiop0->iop->fd_lock;
 		newiop1->iop->io_fd	= newiop0->iop->io_fd;
 
 		LIST_INSERT_HEAD(&newiop0->io_paths, newiop1, io_paths);
 		LIST_INSERT_HEAD(&iocfg->iop0_paths, newiop0, iop0_paths);
 	    }
 
+	    /* XXX NEEDS TO BE FREE'D */
 	    LIST_REMOVE(iop0, iop0_paths);
+
 	    newiop0 = LIST_FIRST(&iocfg->iop0_paths);
 	    newiop1 = LIST_FIRST(&newiop0->io_paths);
 
 	    if ((newiop1->iop->iofd_p = malloc(sizeof(int))) == NULL)
 		log_syserr("malloc error");
-	    else
-		*newiop1->iop->iofd_p = -1;
 
-	    newiop1->iop->fd_lock = malloc(sizeof(pthread_mutex_t));
-	    if (pthread_mutex_init(&newiop1->iop->fd_lock, NULL) != 0) {
-                log_die("fd_lock init error\n");
-                exit(-1);
-            }
+	    *newiop1->iop->iofd_p = -1;
 
- 	    LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths) {		    
+	    pthread_mutexattr_init(&mtx_attrs);
+	    if ((r = pthread_mutexattr_settype(&mtx_attrs, PTHREAD_MUTEX_ERRORCHECK)) \
+		!= 0)
+		log_syserr("ATTR SETTYPE FAILED: %d\n", r);
+
+	    if (pthread_mutex_init(&newiop1->iop->fd_lock, &mtx_attrs) != 0) {
+		log_die("fd_lock init error\n");
+		exit(-1);
+	    }
+
+	    LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths) {
 		iop1 = LIST_FIRST(&iop0->io_paths); /* ONLY 1 UNIQUE IN LIST */
-		iop1->iop->fd_lock = newiop1->iop->fd_lock;
+		iop1->iop->fdlock_p = &newiop1->iop->fd_lock;
 		iop1->iop->iofd_p  = newiop1->iop->iofd_p;
 	    }
 	}

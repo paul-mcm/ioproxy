@@ -389,7 +389,7 @@ int rbuf_t3_tlsreadfrom(struct io_params *iop)
 	sop = iop->sock_data;
 	r_ptr = set_rbuf_lock(iop);
 
-	MTX_LOCK(&iop->fd_lock);
+	FDMTX_LOCK(iop->fdlock_p);
 	
         for (;;) {
 	    lptr = r_ptr->line;
@@ -397,10 +397,10 @@ int rbuf_t3_tlsreadfrom(struct io_params *iop)
 	    while (nleft > 0) {
 		nw = tls_write(sop->tls_ctx, lptr, r_ptr->len);
 		if (nw == r_ptr->len) {
-		    MTX_UNLOCK(&iop->fd_lock);
+		    FDMTX_UNLOCK(iop->fdlock_p);
 		    MTX_LOCK(&r_ptr->next->mtx_lock);
 		    MTX_UNLOCK(&r_ptr->mtx_lock);
-		    MTX_LOCK(&iop->fd_lock);
+		    FDMTX_LOCK(iop->fdlock_p);
 		    CNT_UPDATE(iop, nw);
 		    r_ptr = r_ptr->next;
 		    break;
@@ -408,11 +408,11 @@ int rbuf_t3_tlsreadfrom(struct io_params *iop)
 		    SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
 		    continue;
 		} else if (nw <= 0) {
-		    MTX_UNLOCK(&iop->fd_lock);
+		    FDMTX_UNLOCK(iop->fdlock_p);
 		    if ((r = do_wrerr(iop, r_ptr)) < 0) {
 			return r;
 		    } else {
-			MTX_LOCK(&iop->fd_lock);
+			FDMTX_LOCK(iop->fdlock_p);
 			continue;
 		    }
 		}
@@ -428,7 +428,7 @@ int rbuf_t3_readfrom(struct io_params *iop)
 	char			*lptr;
 
 	r_ptr = set_rbuf_lock(iop);
-	MTX_LOCK(&iop->fd_lock);
+	FDMTX_LOCK(iop->fdlock_p);
 
 	for (;;) {
 	    lptr = r_ptr->line;
@@ -438,21 +438,21 @@ int rbuf_t3_readfrom(struct io_params *iop)
 		nw = write(*iop->iofd_p, lptr, r_ptr->len);
 		if (nw == r_ptr->len) {
 		    CNT_UPDATE(iop, nw);
-		    MTX_UNLOCK(&iop->fd_lock);
+		    FDMTX_UNLOCK(iop->fdlock_p);
 		    MTX_LOCK(&r_ptr->next->mtx_lock);
 		    MTX_UNLOCK(&r_ptr->mtx_lock);
-		    MTX_LOCK(&iop->fd_lock);
+		    FDMTX_LOCK(iop->fdlock_p);
 		    r_ptr = r_ptr->next;
 		    break;
 		} else if (nw < r_ptr->len && nw > 0) {
 		    SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
 		    continue;
 		} else if (nw <= 0) {
-		    MTX_UNLOCK(&iop->fd_lock);
+		    FDMTX_UNLOCK(iop->fdlock_p);
 		    if ((r = do_wrerr(iop, r_ptr)) < 0) {
 			return r;
 		    } else {
-			MTX_LOCK(&iop->fd_lock);
+			MTX_LOCK(iop->fdlock_p);
 			continue;
 		    }
 		}
@@ -825,9 +825,9 @@ void release_locks(void *arg)
 		    pthread_mutex_unlock(&rb->mtx_lock);
 		}
 	    } else if (*iop->cfgtype_p == TYPE_3) {
-		r = pthread_mutex_lock(&iop->fd_lock);
+		r = pthread_mutex_lock(iop->fdlock_p);
 		if (r == 0 || r == EDEADLK) {
-		    pthread_mutex_unlock(&iop->fd_lock);
+		    pthread_mutex_unlock(iop->fdlock_p);
 		}
 
 		r = pthread_mutex_lock(&rb->mtx_lock);
