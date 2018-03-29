@@ -51,7 +51,7 @@ all: $(objects)
 	@ln -s ./ioproxyd ./ioproxy
 
 rbuf.o: lib/buff_management/rbuf.h
-	@$(CC) $(CCFLAGS) -ltls -g -I${INCLUDES} -pthread -c -o rbuf.o lib/buff_management/rbuf.c
+	@$(CC) $(CCFLAGS) -g -I${INCLUDES} -pthread -c -o rbuf.o lib/buff_management/rbuf.c
 
 config.o: lib/configuration/config.h
 	@$(CC) $(CCFLAGS) -g -I${INCLUDES} -c -o config.o lib/configuration/config.c
