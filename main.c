@@ -144,7 +144,6 @@ void iop_setup(struct io_cfg *iocfg)
 	    /* AT THIS STAGE, iop0_paths HAS ONLY 1 MEMBER */
 	    iop0 = LIST_FIRST(&iocfg->iop0_paths);
 	    iop = iop0->iop;
-	    iop->iop1_p = &iop0->io_paths;
 
 	    pthread_cond_init(&iop->readable, NULL);
 	    if (pthread_mutex_init(&iop0->iop->listlock, NULL) != 0)
@@ -190,10 +189,11 @@ void iop_setup(struct io_cfg *iocfg)
 
 		if ((newiop1->iop->path = malloc(strlen(iop0->iop->path) + 1)) == NULL)
 		    log_syserr("malloc() error\n");
-
 		strlcpy(newiop1->iop->path, iop0->iop->path, strlen(iop0->iop->path) + 1);
 
-		newiop0->iop->iop1_p = &iop0->io_paths;
+		if ((newiop0->iop->path = malloc(strlen(iop1->iop->path) + 1)) == NULL)
+		    log_syserr("malloc() error\n");
+		strlcpy(newiop0->iop->path, iop1->iop->path, strlen(iop1->iop->path) + 1);
 
 		if (pthread_mutex_init(&newiop0->iop->listlock, NULL) != 0)
 		    log_syserr("mutex init error");
@@ -225,11 +225,22 @@ void iop_setup(struct io_cfg *iocfg)
 		LIST_INSERT_HEAD(&iocfg->iop0_paths, newiop0, iop0_paths);
 	    }
 
-	    /* XXX NEEDS TO BE FREE'D */
+	    /* REMOVE/FREE ORIGINAL */
 	    LIST_REMOVE(iop0, iop0_paths);
+	    LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
+		printf("PATHS: %p %s\n", iop1->iop->path, iop1->iop->path);
+		free_iop(iop1->iop);
+	    }
+
+	    free_iop(iop0->iop);
+	    free(iop0);
 
 	    newiop0 = LIST_FIRST(&iocfg->iop0_paths);
 	    newiop1 = LIST_FIRST(&newiop0->io_paths);
+
+	    LIST_FOREACH(iop1, &newiop0->io_paths, io_paths) {
+		printf("NEWPATHS: %s\n", iop1->iop->path);
+	    }
 
 	    if ((newiop1->iop->iofd_p = malloc(sizeof(int))) == NULL)
 		log_syserr("malloc error");

@@ -308,7 +308,6 @@ void print_config_params(struct io_params *iop)
 	printf("io_fd ptr: %p\n", iop->io_fd);
 	printf("fd_lock ptr: %p\n", iop->fd_lock);
 	printf("buf_sz: %d\n", iop->buf_sz);
-	printf("iop1 ptr: %p\n", iop->iop1_p);
 
 	if (iop->pipe_cmd != NULL)
 	    printf("pipe_cmd:\t\t%s\n", iop->pipe_cmd);
@@ -319,7 +318,6 @@ void print_config_params(struct io_params *iop)
 */
 	printf("nonblock: %d\n", iop->nonblock);
 	printf("io_fd: %d\n", iop->io_fd);
-
 	printf("path: %s\n", iop->path != NULL ? iop->path : NULL);
 
 	if (use_ssh(iop)) {
@@ -558,7 +556,6 @@ void free_sock_param(struct sock_param *sd)
 
 	free(sd);
 }
-
 
 void free_iop0(struct iop0_params *iop0)
 {
