@@ -34,6 +34,10 @@
 #include <syslog.h>
 #include <unistd.h>
 
+#ifdef LINUX
+#include <bsd/string.h>
+#endif
+
 #include "config.h"
 
 #define BUFF_SIZE	2048

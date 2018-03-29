@@ -41,6 +41,10 @@
 #include <libssh/libssh.h>
 #include "../configuration/config.h"
 
+#ifdef LINUX
+#include <bsd/string.h>
+#endif
+
 int open_desc(struct io_params *);
 int open_fifo(struct io_params *);
 int open_file(struct io_params *);

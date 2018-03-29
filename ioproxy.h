@@ -41,6 +41,10 @@
 #include "lib/buff_management/rbuf.h"
 #include "lib/file_types/ftypes.h"
 
+#ifdef LINUX
+#include <bsd/string.h>
+#endif
+
 #define FALSE 0
 #define TRUE 1
 
