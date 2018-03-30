@@ -683,6 +683,12 @@ void copy_io_params(struct io_params *src, struct io_params *dst)
 		    log_syserr("malloc() error");
 		strlcpy(sop->ssh_cmd, src_sop->ssh_cmd, strlen(src_sop->ssh_cmd) + 1);
 	    }
+
+	    if (src_sop->sockpath != NULL) {
+		if ((sop->sockpath = malloc(strlen(src_sop->sockpath) + 1)) == NULL)
+		    log_syserr("malloc() error");
+		strlcpy(sop->sockpath, src_sop->sockpath, strlen(src_sop->sockpath) + 1);
+	    }
 	}
 }
 

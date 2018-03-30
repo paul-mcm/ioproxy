@@ -493,6 +493,8 @@ struct io_params *iop_alloc(void)
 	    log_syserr("Failed to allocate io_param", errno);
 
 	bzero(iop, sizeof(struct io_params));
+	iop->path = NULL;
+	iop->pipe_cmd = NULL;
 	iop->io_fd = -1;
 	iop->sock_data = NULL;
 	iop->buf_sz = BUFF_SIZE;
@@ -502,18 +504,25 @@ struct io_params *iop_alloc(void)
 
 struct sock_param *sock_param_alloc()
 {
-	struct sock_param *sd;
+	struct sock_param *sop;
  
-	if ((sd = malloc(sizeof(struct sock_param))) == NULL)
+	if ((sop = malloc(sizeof(struct sock_param))) == NULL)
 		log_syserr("Failed to malloc sock_param", errno);
 
-	bzero(sd, sizeof(struct sock_param));
-	sd->hostname	= NULL;
-	sd->sockpath	= NULL;
-	sd->ip		= NULL;
-	sd->listenfd	= -1;
-	sd->cert_vrfy	= TRUE;
-	return sd;
+	bzero(sop, sizeof(struct sock_param));
+	sop->hostname		= NULL;
+	sop->sockpath		= NULL;
+	sop->ip			= NULL;
+	sop->tls_port		= NULL;
+	sop->cacert_path	= NULL;
+	sop->cacert_dirpath	= NULL;
+	sop->host_cert		= NULL;
+	sop->host_key		= NULL;
+	sop->ssh_cmd		= NULL;
+	sop->cert_vrfy		= TRUE;
+	sop->listenfd		= -1;
+
+	return sop;
 }
 
 void free_iocfg(struct io_cfg *iocfg)
@@ -543,18 +552,36 @@ void free_iocfg(struct io_cfg *iocfg)
 	}
 }
 
-void free_sock_param(struct sock_param *sd)
+void free_sock_param(struct sock_param *sop)
 {
-	if (sd->hostname != NULL)
-		free(sd->hostname);
+	if (sop->sockpath != NULL)
+	    free(sop->sockpath);
 
-	if (sd->sockpath != NULL)
-		free(sd->sockpath);
+	if (sop->hostname != NULL)
+	    free(sop->hostname);
 
-	if (sd->ip != NULL)
-		free(sd->ip);
+	if (sop->ip != NULL)
+	    free(sop->ip);
 
-	free(sd);
+	if (sop->tls_port != NULL)
+	    free(sop->tls_port);
+
+	if (sop->cacert_path != NULL)
+	    free(sop->cacert_path);
+
+	if (sop->cacert_dirpath != NULL)
+	    free(sop->cacert_dirpath);
+
+	if (sop->host_cert != NULL)
+	    free(sop->host_cert);
+
+	if (sop->host_key != NULL)
+	    free(sop->host_key);
+
+	if (sop->ssh_cmd != NULL)
+	    free(sop->ssh_cmd);
+
+	free(sop);
 }
 
 void free_iop0(struct iop0_params *iop0)
@@ -570,18 +597,22 @@ void free_iop0(struct iop0_params *iop0)
 	    pthread_mutex_destroy(&iop->fd_lock);
 
 	free_rbuf(iop);  /* XXX WHAT HAPPENS TO OTHER THREADS LOCKED ON RBUFF? */
-        free(iop->listready);  /* XXX WHY IS THIS MALLOC'D? */
+        free(iop->listready);
         free_iop(iop);
 }
 	
 void free_iop(struct io_params *iop)
 {
-	struct sock_param 	*s_iop;
 
 	if (iop->sock_data != NULL)
 		free_sock_param(iop->sock_data);
 
-	free(iop->path);
+	if (iop->path != NULL)
+	    free(iop->path);
+
+	if (iop->pipe_cmd != NULL)
+	    free(iop->pipe_cmd);
+
 	free(iop);
 }
 
