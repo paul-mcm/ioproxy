@@ -367,28 +367,29 @@ void *io_t3_thread(void *arg)
 		if (*iop->iofd_p > 0) {
 		    pthread_mutex_unlock(&iop->fd_lock);
 		} else {
-
- 		    if (is_netsock(iop))
+		    if (is_netsock(iop))
 			log_msg("opening fd for %s\n", sop->hostname);
 		    else
 			log_msg("opening dscrptr for %s\n", iop->path);
 
 		    r = open_desc(iop);
-		    if (r == -2) { /* NON RECOVERABLE ERROR */
-			pthread_mutex_unlock(&iop->fd_lock);
-			break;
-		    } else if (r <= 0) {
-			log_msg("open error. Sleeping...\n");
-			pthread_mutex_unlock(&iop->fd_lock);
-			sleep(10);
-			continue;
-		    } else {
-			*iop->iofd_p = r;
-			pthread_mutex_unlock(&iop->fd_lock);
-		    }
 		}
+		if (r == -2) { /* NON RECOVERABLE ERROR */
+		    pthread_mutex_unlock(&iop->fd_lock);
+		    break;
+		} else if (r <= 0) {
+		    log_msg("open error. Sleeping...\n");
+		    pthread_mutex_unlock(&iop->fd_lock);
+		    sleep(5);
+		    continue;
+		} else {
+		    *iop->iofd_p = r;
+		    pthread_mutex_unlock(&iop->fd_lock);
+		}
+
 	    }
 
+	    /* BLOCK */	
 	    if (use_tls(iop)) {
 		r = rbuf_t3_tlsreadfrom(iop);
 	    } else if (is_sock(iop) && sop->sockio == DGRAM) {
@@ -398,22 +399,14 @@ void *io_t3_thread(void *arg)
 	    }
 
 	    /* ONLY HERE IF DESCRIPTOR CLOSED */
-	    if (r == -2)
-		break;
-
 	    if (is_netsock(iop) || iop->io_type == FIFO) {
 		close_desc(iop);
 		*iop->iofd_p = -1;
 	    }
 
-	    if (SIGTERM_STAT == TRUE)
-		break;
-	    else if (SIGHUP_STAT == TRUE)
+	    if (r == -2 || SIGTERM_STAT == TRUE || SIGHUP_STAT == TRUE)
 		break;
 	}
-
-	if (is_netsock(iop) || iop->io_type == FIFO)
-	    close_desc(iop);
 
 	if (iop->io_type == UNIX_SOCK && unlink(iop->path) != 0)
 	    log_ret("unlink error: %s, %s\n", iop->path);	
@@ -438,11 +431,10 @@ void *io_thread(void *arg)
 	pthread_cleanup_push(release_locks, arg);
 	for (;;) {
 	    if (iop->io_fd < 0) {
-		if (is_netsock(iop)) {
+		if (is_netsock(iop))
 		    log_msg("creating socket for %s\n", sop->ip);
-		} else {
+		else
 		    log_msg("opening dscrptr for %s\n", iop->path);
-		}
 
 		/* Returns:
 		 *  -2 = non-recoverable error
@@ -461,50 +453,36 @@ void *io_thread(void *arg)
 		} else if (r != 0) {
 		    iop->io_fd = r;
 		}
-
-		/* BLOCK */
-		if (is_src(iop)) {
-		    if (use_tls(iop)) {
-			r = rbuf_tls_writeto(iop);
-		    } else if (use_ssh(iop)) {
-			r = rbuf_ssh_writeto(iop);
-		    } else if (is_sock(iop) && sop->sockio == DGRAM) {
-			r = rbuf_dgram_writeto(iop);
-		    } else {
-			r = rbuf_writeto(iop);
-		    }
+	    }
+	    /* BLOCK */
+	    if (is_src(iop)) {
+		if (use_tls(iop)) {
+		    r = rbuf_tls_writeto(iop);
+		} else if (use_ssh(iop)) {
+		    r = rbuf_ssh_writeto(iop);
+		} else if (is_sock(iop) && sop->sockio == DGRAM) {
+		    r = rbuf_dgram_writeto(iop);
 		} else {
-		    if (use_tls(iop)) {
-			r = rbuf_tls_readfrom(iop);
-		    } else if (is_sock(iop) && sop->sockio == DGRAM) {
-			r = rbuf_dgram_readfrom(iop);
-		    } else {
-			r = rbuf_readfrom(iop);
-		    }
+		    r = rbuf_writeto(iop);
 		}
-
-		/* ONLY HERE IF DESCRIPTOR CLOSED */
-		if (r == -2)
-		    break;
-
-		if (is_netsock(iop) || iop->io_type == FIFO) {
-		    close_desc(iop);
-		    iop->io_fd = -1;
+	    } else {
+		if (use_tls(iop)) {
+		    r = rbuf_tls_readfrom(iop);
+		} else if (is_sock(iop) && sop->sockio == DGRAM) {
+		    r = rbuf_dgram_readfrom(iop);
+		} else {
+		    r = rbuf_readfrom(iop);
 		}
+	    }
 
-		if (SIGTERM_STAT == TRUE)
-		    break;
-		else if (SIGHUP_STAT == TRUE)
-		    break;	    }
-	}
+	    /* ONLY HERE IF DESCRIPTOR CLOSED */
+	    if (is_netsock(iop) || iop->io_type == FIFO || iop->io_type == PIPE) {
+		close_desc(iop);
+		iop->io_fd = -1;
+	    }
 
-	if (is_netsock(iop)) {
-	    close_desc(iop);
-	    iop->io_fd = -1;
-	}
-
-	if (iop->io_type == PIPE) {
-	    close_desc(iop);
+	    if (r == -2 || SIGTERM_STAT == TRUE || SIGHUP_STAT == TRUE)
+		break;
 	}
 
 	if (iop->io_type == UNIX_SOCK && unlink(iop->path) != 0)
