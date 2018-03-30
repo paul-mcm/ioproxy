@@ -147,6 +147,7 @@ int rbuf_tls_readfrom(struct io_params *iop)
 			MTX_UNLOCK(&r_ptr->mtx_lock);
 			CNT_UPDATE(iop, nw);
 			r_ptr = r_ptr->next;
+			nleft -= nw;
 			break;
 		    } else if (nw < r_ptr->len && nw > 0) {
 			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
@@ -166,6 +167,7 @@ int rbuf_tls_readfrom(struct io_params *iop)
 			RD_LOCK(&r_ptr->next->rw_lock);
 			RW_UNLOCK(&r_ptr->rw_lock);
 			CNT_UPDATE(iop, nw);
+			nleft -= nw;
 			r_ptr = r_ptr->next;
 			break;
 		    } else if (nw < r_ptr->len && nw > 0) {
@@ -243,6 +245,7 @@ int rbuf_readfrom(struct io_params *iop)
 			MTX_LOCK(&r_ptr->next->mtx_lock);
 			MTX_UNLOCK(&r_ptr->mtx_lock);
 			CNT_UPDATE(iop, nw);
+			nleft -= nw;
 			r_ptr = r_ptr->next;
 			iop->r_ptr = iop->r_ptr;
 		    } else if (nw < r_ptr->len && nw > 0) {
@@ -263,6 +266,7 @@ int rbuf_readfrom(struct io_params *iop)
 			RD_LOCK(&r_ptr->next->rw_lock);
 			RW_UNLOCK(&r_ptr->rw_lock);
 			CNT_UPDATE(iop, nw);
+			nleft -= nw;
 			r_ptr = r_ptr->next;
 			iop->r_ptr = r_ptr;
 			break;
@@ -345,6 +349,7 @@ int rbuf_dgram_readfrom(struct io_params *iop)
 			MTX_LOCK(&r_ptr->next->mtx_lock);
 			MTX_UNLOCK(&r_ptr->mtx_lock);
 			CNT_UPDATE(iop, nw);
+			nleft -= nw;
 			r_ptr = r_ptr->next;
 			break;
 		    } else if (nw < r_ptr->len && nw > 0) {
@@ -365,6 +370,7 @@ int rbuf_dgram_readfrom(struct io_params *iop)
 			RD_LOCK(&r_ptr->next->rw_lock);
 			RW_UNLOCK(&r_ptr->rw_lock);
 			CNT_UPDATE(iop, nw);
+			nleft -= nw;
 			r_ptr = r_ptr->next;
 			break;
 		    } else if (nw < r_ptr->len && nw > 0) {
@@ -402,6 +408,7 @@ int rbuf_t3_tlsreadfrom(struct io_params *iop)
 		    MTX_UNLOCK(&r_ptr->mtx_lock);
 		    FDMTX_LOCK(iop->fdlock_p);
 		    CNT_UPDATE(iop, nw);
+		    nleft -= nw;
 		    r_ptr = r_ptr->next;
 		    break;
 		} else if (nw < r_ptr->len && nw > 0) {
@@ -442,6 +449,7 @@ int rbuf_t3_readfrom(struct io_params *iop)
 		    MTX_LOCK(&r_ptr->next->mtx_lock);
 		    MTX_UNLOCK(&r_ptr->mtx_lock);
 		    FDMTX_LOCK(iop->fdlock_p);
+		    nleft -= nw;
 		    r_ptr = r_ptr->next;
 		    break;
 		} else if (nw < r_ptr->len && nw > 0) {

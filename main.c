@@ -182,18 +182,10 @@ void iop_setup(struct io_cfg *iocfg)
 		newiop1 = iop1_alloc();
 		newiop0->iop = iop_alloc();
 		newiop1->iop = iop_alloc();
-		
+
 		/* SWAP */
 		copy_io_params(iop1->iop, newiop0->iop); 
 		copy_io_params(iop0->iop, newiop1->iop); 
-
-		if ((newiop1->iop->path = malloc(strlen(iop0->iop->path) + 1)) == NULL)
-		    log_syserr("malloc() error\n");
-		strlcpy(newiop1->iop->path, iop0->iop->path, strlen(iop0->iop->path) + 1);
-
-		if ((newiop0->iop->path = malloc(strlen(iop1->iop->path) + 1)) == NULL)
-		    log_syserr("malloc() error\n");
-		strlcpy(newiop0->iop->path, iop1->iop->path, strlen(iop1->iop->path) + 1);
 
 		if (pthread_mutex_init(&newiop0->iop->listlock, NULL) != 0)
 		    log_syserr("mutex init error");
@@ -227,20 +219,14 @@ void iop_setup(struct io_cfg *iocfg)
 
 	    /* REMOVE/FREE ORIGINAL */
 	    LIST_REMOVE(iop0, iop0_paths);
-	    LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
-		printf("PATHS: %p %s\n", iop1->iop->path, iop1->iop->path);
+	    LIST_FOREACH(iop1, &iop0->io_paths, io_paths)
 		free_iop(iop1->iop);
-	    }
 
 	    free_iop(iop0->iop);
 	    free(iop0);
 
 	    newiop0 = LIST_FIRST(&iocfg->iop0_paths);
 	    newiop1 = LIST_FIRST(&newiop0->io_paths);
-
-	    LIST_FOREACH(iop1, &newiop0->io_paths, io_paths) {
-		printf("NEWPATHS: %s\n", iop1->iop->path);
-	    }
 
 	    if ((newiop1->iop->iofd_p = malloc(sizeof(int))) == NULL)
 		log_syserr("malloc error");
@@ -626,10 +612,78 @@ int cancel_ioparam(struct io_params *iop)
 
 void copy_io_params(struct io_params *src, struct io_params *dst)
 {
+	struct sock_param	*sop, *src_sop;
+	int			r;
+
 	memcpy(dst, src, sizeof(struct io_params)); 
 
-	if (src->sock_data != NULL)
-		memcpy(dst->sock_data, src->sock_data, sizeof(struct sock_param));
+	if (src->path != NULL) {
+	    if ((dst->path = malloc(strlen(src->path) + 1)) == NULL)
+		log_syserr("malloc() error\n");
+	    strlcpy(dst->path, dst->path, strlen(src->path) + 1);
+	}
+
+	if (src->pipe_cmd != NULL) {
+	    if ((dst->pipe_cmd = malloc(strlen(src->pipe_cmd) + 1)) == NULL)
+		log_syserr("malloc() error");
+	    strlcpy(dst->pipe_cmd, src->pipe_cmd, strlen(src->pipe_cmd) + 1);
+	}
+
+	if (src->sock_data != NULL) {
+	    dst->sock_data = sock_param_alloc();
+	    sop = dst->sock_data;
+	    src_sop = src->sock_data;
+
+	    memcpy(sop, src_sop, sizeof(struct sock_param));
+
+	    if (src_sop->hostname != NULL) {
+		if ((sop->hostname = malloc(strlen(src_sop->hostname) + 1)) == NULL)
+		    log_syserr("malloc() error");
+		r = strlcpy(sop->hostname, src_sop->hostname, strlen(src_sop->hostname) + 1);
+	    }
+
+	    if (src_sop->ip != NULL) {
+		if ((sop->ip = malloc(strlen(src_sop->ip) + 1)) == NULL)
+		    log_syserr("malloc() error");
+		strlcpy(sop->ip, src_sop->ip, strlen(src_sop->ip) + 1);
+	    }
+
+	    if (src_sop->tls_port != NULL) {
+		if ((sop->tls_port = malloc(strlen(src_sop->tls_port) + 1)) == NULL)
+		    log_syserr("malloc() error");
+		strlcpy(sop->tls_port, src_sop->tls_port, strlen(src_sop->tls_port) + 1);
+	    }
+
+	    if (src_sop->cacert_path != NULL) {
+		if ((sop->cacert_path = malloc(strlen(src_sop->cacert_path) + 1)) == NULL)
+		    log_syserr("malloc() error");
+		strlcpy(sop->cacert_path, src_sop->cacert_path, strlen(src_sop->cacert_path) + 1);
+	    }
+
+	    if (src_sop->cacert_dirpath != NULL) {
+		if ((sop->cacert_dirpath = malloc(strlen(src_sop->cacert_dirpath) + 1)) == NULL)
+		    log_syserr("malloc() error");
+		strlcpy(sop->cacert_dirpath, src_sop->cacert_dirpath, strlen(src_sop->cacert_dirpath) + 1);
+	    }
+
+	    if (src_sop->host_cert != NULL) {
+		if ((sop->host_cert = malloc(strlen(src_sop->host_cert) + 1)) == NULL)
+		    log_syserr("malloc() error");
+		strlcpy(sop->host_cert, src_sop->host_cert, strlen(src_sop->host_cert) + 1);
+	    }
+
+	    if (src_sop->host_key != NULL) {
+		if ((sop->host_key = malloc(strlen(src_sop->host_key) + 1)) == NULL)
+		    log_syserr("malloc() error");
+		strlcpy(sop->host_key, src_sop->host_key, strlen(src_sop->host_key) + 1);
+	    }
+
+	    if (src_sop->ssh_cmd != NULL) {
+		if ((sop->ssh_cmd = malloc(strlen(src_sop->ssh_cmd) + 1)) == NULL)
+		    log_syserr("malloc() error");
+		strlcpy(sop->ssh_cmd, src_sop->ssh_cmd, strlen(src_sop->ssh_cmd) + 1);
+	    }
+	}
 }
 
 void * sighup_thrd(void *a)
