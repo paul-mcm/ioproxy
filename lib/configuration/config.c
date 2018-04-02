@@ -361,7 +361,7 @@ int validate_path(char *path)
 	struct stat     s;
 
         if (stat(path, &s) != 0) {
-	    log_syserr("Error for file %s: %s\n", path, strerror(errno));
+	    log_syserr("File error: %s\n", path);
 	    return -1;
         } else {
             return 0;
