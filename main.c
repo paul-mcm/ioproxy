@@ -20,6 +20,7 @@ char			*config_file = "/etc/ioproxyd.conf";
 volatile sig_atomic_t	SIGHUP_STAT;
 volatile sig_atomic_t	SIGTERM_STAT;
 pthread_mutex_t		sighupstat_lock;
+pthread_mutex_t		sigtermstat_lock;
 pthread_cond_t		thrd_stat;
 int			thread_cnt;
 pthread_barrier_t	thrd_b;
@@ -100,6 +101,9 @@ int main(int argc, char *argv[])
 	if (pthread_mutex_init(&sighupstat_lock, NULL) != 0)
 	    log_syserr("mutex init error");
 
+	if (pthread_mutex_init(&sigtermstat_lock, NULL) != 0)
+	    log_syserr("mutex init error");
+
 	ssh_threads_set_callbacks(ssh_threads_get_pthread());
 	ssh_init();
 
@@ -127,7 +131,7 @@ int main(int argc, char *argv[])
 
 	/* BLOCK */
 	pthread_join(sigterm_tid, NULL);
-	terminate();
+	log_msg("RECV'D SIGTERM. EXITING...");
 	exit(0);
 }
 
@@ -404,8 +408,12 @@ void *io_t3_thread(void *arg)
 		*iop->iofd_p = -1;
 	    }
 
-	    if (r == -2 || SIGTERM_STAT == TRUE || SIGHUP_STAT == TRUE)
+	    if (r == -2) {
 		break;
+	    } else if (sigrecvd() == 1) {
+		log_msg("RECV'D TERMINATING SIGNAL\n");
+		break;
+	    }
 	}
 
 	if (iop->io_type == UNIX_SOCK && unlink(iop->path) != 0)
@@ -481,8 +489,12 @@ void *io_thread(void *arg)
 		iop->io_fd = -1;
 	    }
 
-	    if (r == -2 || SIGTERM_STAT == TRUE || SIGHUP_STAT == TRUE)
+	    if (r == -2) {
 		break;
+	    } else if (sigrecvd()) {
+		log_msg("RECV'D TERMINATING SIGNAL\n");
+		break;
+	    }
 	}
 
 	if (iop->io_type == UNIX_SOCK && unlink(iop->path) != 0)
@@ -515,7 +527,7 @@ int validate_ftype(struct io_params *iop, struct stat *s)
 
 void * sigterm_thrd(void *arg)
 {
-        int			sig;
+        int			sig, r;
         sigset_t		sig_set;
 
         sigemptyset(&sig_set);
@@ -524,7 +536,11 @@ void * sigterm_thrd(void *arg)
 
 	/* BLOCK */
         sigwait(&sig_set, &sig);
+
+	MTX_LOCK(&sigtermstat_lock);
         SIGTERM_STAT = TRUE;
+	MTX_UNLOCK(&sigtermstat_lock);
+
         pthread_exit((void *)0);
 }
 
@@ -539,30 +555,6 @@ void set_thrd_sigmask(void)
 
         if ((r = pthread_sigmask(SIG_BLOCK, &s, NULL)) != 0)
 		log_die("pthread_sigmask error: %d\n", r);
-}
-
-
-void terminate(void)
-{
-	struct io_cfg		*iocfg;
-	struct iop0_params	*iop0;
-	int			r;
-
-	log_msg("Terminating\n");
-
-	LIST_FOREACH(iocfg, &all_cfg, io_cfgs) {
-
-		LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths)
-		    close_desc(iop0->iop);
-
-		LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths)
-		    cancel_ioparam(iop0->iop);	
-	}
-
-	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
-	    LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths)
-		if ((r = pthread_cancel(iop0->iop->tid)) != 0)
-		    log_die("pthread_cancel() error: %d\n", r);
 }
 
 int cancel_ioparam(struct io_params *iop)
@@ -762,4 +754,26 @@ int cancel_threads(struct iop0_params *iop0)
 	    n++;
 	}
 	return n;
+}
+
+int sigrecvd(void)
+{
+	int r;
+
+	MTX_LOCK(&sigtermstat_lock);
+	if (SIGTERM_STAT == TRUE) {
+	    MTX_UNLOCK(&sigtermstat_lock);
+	    return 1;
+	} else {
+	    MTX_UNLOCK(&sigtermstat_lock);
+	}
+
+	MTX_LOCK(&sighupstat_lock);
+	if (SIGHUP_STAT == TRUE) {
+	    MTX_UNLOCK(&sighupstat_lock);
+	    return 1;
+	} else {
+	    MTX_UNLOCK(&sighupstat_lock);
+	}
+	return 0;
 }

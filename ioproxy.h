@@ -48,7 +48,6 @@
 #define FALSE 0
 #define TRUE 1
 
-void terminate(void);
 void * iocfg_manager(void *);
 void * io_thread(void *);
 void * io_t3_thread(void *);
@@ -67,3 +66,4 @@ void *iop0_thrd(void *);
 void copy_io_params(struct io_params *, struct io_params *);
 
 int cancel_threads(struct iop0_params *);
+int sigrecvd(void);

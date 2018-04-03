@@ -226,7 +226,7 @@ int open_fifo(struct io_params *iop)
 	    if ((fd = open(iop->path, oflags)) < 0) {
 		if (errno == ENXIO) {
 		    log_msg("Destination %s FIFO not writable without reader", iop->path);
-		    sleep(5);
+		    sleep(3);
 		    continue;
 		} else {
 		    log_syserr("open(2) error");
@@ -266,7 +266,7 @@ int open_file(struct io_params *iop)
 	}
 
 	if (lseek(fd, 0, SEEK_END) < 0)
-		log_syserr("lseek(2) failed\n", errno);
+		log_syserr("lseek(2) failed");
 
 	return fd;
 }

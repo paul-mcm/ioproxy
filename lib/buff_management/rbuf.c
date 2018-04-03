@@ -15,6 +15,9 @@
 
 #include "rbuf.h"
 extern volatile sig_atomic_t SIGHUP_STAT;
+extern volatile sig_atomic_t SIGTERM_STAT;
+extern pthread_mutex_t sighupstat_lock;
+extern pthread_mutex_t sigtermstat_lock;
 
 #define IS_TYPE2(i)				\
 if (i->cfgtype_p == TYPE_2)			\
@@ -204,7 +207,8 @@ int rbuf_writeto(struct io_params *iop)
 		    iop->w_ptr = w_ptr;
 		    continue;
 		} else if ((r = do_rderr(iop, w_ptr)) < 0) {
-			return r;
+		    log_msg("RETURNING: WROTE TOTAL OF %d BYTES TO RBUFF\n", iop->bytes);
+		    return r;
 		}
 	    }
 	} else {
@@ -241,6 +245,7 @@ int rbuf_readfrom(struct io_params *iop)
 		nleft = r_ptr->len;
 		while (nleft > 0) {
 		    nw = write(iop->io_fd, lptr, r_ptr->len);
+		    log_msg("Wrote %d bytes to %d\n", nw, iop->io_fd);
 		    if (nw == r_ptr->len) {
 			MTX_LOCK(&r_ptr->next->mtx_lock);
 			MTX_UNLOCK(&r_ptr->mtx_lock);
@@ -534,6 +539,41 @@ void free_rbuf(struct io_params *iop)
 	}
 }
 
+void rbuf_locksync0(struct io_params *iop)
+{
+	int r;
+
+	MTX_LOCK(&iop->listlock);
+	*iop->listready = 1;
+	MTX_UNLOCK(&iop->listlock);
+
+	/* SIGNAL WRITE THREAD */
+	pthread_cond_signal(&iop->readable);
+}
+
+void rbuf_locksync(struct io_params *iop)
+{
+	int r;
+
+	MTX_LOCK(&iop->listlock);
+        while (*iop->listready == 0)
+                pthread_cond_wait(&iop->readable, &iop->listlock);
+        MTX_UNLOCK(&iop->listlock);
+}
+
+struct rbuf_entry *set_rbuf_lock(struct io_params *iop)
+{
+	int	r;
+
+	MTX_LOCK(&iop->listlock);
+        while (*iop->listready == 0)
+                pthread_cond_wait(&iop->readable, &iop->listlock);
+        MTX_UNLOCK(&iop->listlock);
+	LOCK(iop, iop->r_ptr);
+
+	return iop->r_ptr;
+}
+
 int io_error(struct io_params *iop, int e, int n)
 {
 	/* RETURN VALS:
@@ -574,41 +614,6 @@ int io_error(struct io_params *iop, int e, int n)
 	}
 }
 
-void rbuf_locksync0(struct io_params *iop)
-{
-	int r;
-
-	MTX_LOCK(&iop->listlock);
-	*iop->listready = 1;
-	MTX_UNLOCK(&iop->listlock);
-
-	/* SIGNAL WRITE THREAD */
-	pthread_cond_signal(&iop->readable);
-}
-
-void rbuf_locksync(struct io_params *iop)
-{
-	int r;
-
-	MTX_LOCK(&iop->listlock);
-        while (*iop->listready == 0)
-                pthread_cond_wait(&iop->readable, &iop->listlock);
-        MTX_UNLOCK(&iop->listlock);
-}
-
-struct rbuf_entry *set_rbuf_lock(struct io_params *iop)
-{
-	int	r;
-
-	MTX_LOCK(&iop->listlock);
-        while (*iop->listready == 0)
-                pthread_cond_wait(&iop->readable, &iop->listlock);
-        MTX_UNLOCK(&iop->listlock);
-	LOCK(iop, iop->r_ptr);
-
-	return iop->r_ptr;
-}
-
 int do_rderr(struct io_params *iop, struct rbuf_entry *rb)
 {
 	int	r, n;
@@ -617,6 +622,14 @@ int do_rderr(struct io_params *iop, struct rbuf_entry *rb)
 	n = SIGHUP_STAT;
 	MTX_UNLOCK(&sighupstat_lock);
 	if (n) { 	/* WE'RE SIGHUP'D */
+	    return -2;
+	}
+
+	MTX_LOCK(&sigtermstat_lock);
+	n = SIGTERM_STAT;
+	MTX_UNLOCK(&sigtermstat_lock);
+	if (n) { 	/* WE'RE TERM'D */
+	    printf("WE'RE TERMED\n");
 	    return -2;
 	}
 
@@ -636,13 +649,19 @@ int do_rderr(struct io_params *iop, struct rbuf_entry *rb)
 		sleep(3);
 		return 0;
 	    }
-
 	    if ((r = do_poll(iop)) == -1) {
 		do_close(iop, rb);
 		return -1;
 	    } else {
 		return 0;
 	    }
+	} else if (r == -1 && iop->io_type == FIFO) {
+	    if ((r = do_poll(iop)) == -1) {
+		do_close(iop, rb);
+		return -1;
+	    } else {
+		return 0;
+	    }		
 	} else if (r == -1) {
 	    return 0;
 	} else if (r == -2) {
@@ -658,9 +677,15 @@ int do_wrerr(struct io_params *iop, struct rbuf_entry *rb)
 	MTX_LOCK(&sighupstat_lock);
 	n = SIGHUP_STAT;
 	MTX_UNLOCK(&sighupstat_lock);
-
 	if (n) /* WE'RE SIGHUP'D */
 	    return -2;
+
+	MTX_LOCK(&sigtermstat_lock);
+	n = SIGTERM_STAT;
+	MTX_UNLOCK(&sigtermstat_lock);
+	if (n) { 	/* WE'RE TERM'D */
+	    return -2;
+	}
 
 	if (rb->len == 0) {
 	    sleep_unlocked(iop, 3, rb);
