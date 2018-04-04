@@ -23,7 +23,7 @@ int parse_line(char * ln, struct io_params *iop)
 	 * 1. LINE ISN'T TERMINATED W/ ';'
 	 * 2. LINE DOESN'T CONTAIN FIELD/VAL SEPARATOR ':'
 	 * 3. LINE HAS INCONSISTANT DIRECTION (src/dst)
-	 * 4. FIELD OR VALUE HAS BLANK SPACE BEFORE 
+	 * 4. FIELD OR VALUE HAS BLANK SPACE BEFORE
 	 *    TERMINATING ';' or ':' CHAR.
 	 */
 
@@ -32,34 +32,33 @@ int parse_line(char * ln, struct io_params *iop)
 
 	/* LINE NOT TERMINATED BY ';' IS A CONFIG ERROR */
 	if (strncmp(&ln[strlen(ln) - 1], ";", 1) != 0 )
-		log_die("missing ';' at end of line: %s\n", ln);
+	    log_die("missing ';' at end of line: %s\n", ln);
 
 	while ((pr = strsep(&ln, ";")) != NULL) {
-  		field = strsep(&pr, ":");
-		val = pr;
+	    field = strsep(&pr, ":");
+	    val = pr;
 
-		/* FAILURE TO FIND ':' MEANS CONFIG ERROR */
-		if(val == '\0')
-			log_die("config error - missing ':' %s\n", ln);
+	    /* FAILURE TO FIND ':' MEANS CONFIG ERROR */
+	    if(val == '\0')
+		log_die("config error - missing ':' %s\n", ln);
 
 		/* CONFIG ERR IF VAL/FIELD END W/ BLANK SPACE */
 		if (isblank(val[strlen(val) - 1]) != 0)
-			log_die("blankspace error: ->%s<-\n", val);
+		    log_die("blankspace error: ->%s<-\n", val);
 
 		if (isblank(field[strlen(field) - 1]) != 0)
-			log_die("blankspace error: ->%s<-\n", field);
+		    log_die("blankspace error: ->%s<-\n", field);
 
 		field = rm_space(field);
 		val = rm_space(val);
 
 		if ((r = fill(field, val, iop)) < 0)
-			log_die("Fill Error: %s %s\n", field, val);
+		    log_die("Fill Error: %s %s\n", field, val);
 
-		/* BREAK IF NOTHING LEFT IN LINE */		
+		/* BREAK IF NOTHING LEFT IN LINE */
 		if(ln[0] == '\0')
-			break;
+		    break;
 	}
-
 	return 0;
 }
 
@@ -92,116 +91,115 @@ int fill(char *f, char *v, struct io_params *iop)
 		iop->io_drn = SRC;
 	    else if (strcasecmp(v, "dst") == 0)
 		iop->io_drn = DST;
-	    else 
+	    else
 		log_die("Invalid config directive: %s: %s;\n", f, v);
 	} else if (strcasecmp(f, "path") == 0 ) {
-		iop->path = malloc(vlen + 1);
-		strncpy(iop->path, v, vlen + 1);
+	    iop->path = malloc(vlen + 1);
+	    strncpy(iop->path, v, vlen + 1);
 	} else if (strcasecmp(f, "sockpath") == 0 ) {
-		iop->path = malloc(vlen + 1);
-		strncpy(iop->path, v, 256);
-		sop->sockpath = iop->path;
+	    iop->path = malloc(vlen + 1);
+	    strncpy(iop->path, v, 256);
+	    sop->sockpath = iop->path;
 	} else if (strcasecmp(f, "host") == 0) {
-		if ((sop->hostname = malloc(vlen + 1)) == NULL)
-			log_syserr("malloc failure: ");
-		strlcpy(sop->hostname, v, vlen + 1);
+	    if ((sop->hostname = malloc(vlen + 1)) == NULL)
+		log_syserr("malloc failure: ");
+
+	    strlcpy(sop->hostname, v, vlen + 1);
 		/* XXX MUST FIX */
 	} else if (strcasecmp(f, "ip") == 0) {
-		sop->ip = malloc(vlen + 1);
-		strncpy(sop->ip, v, vlen + 1);
+	    sop->ip = malloc(vlen + 1);
+	    strncpy(sop->ip, v, vlen + 1);
 	} else if (strcasecmp(f, "conn") == 0)
-		err = set_conn(v, iop);
+	    err = set_conn(v, iop);
 	else if (strcasecmp(f, "sockproto") == 0)
-		err = set_sockio(v, iop);
+	    err = set_sockio(v, iop);
 	else if (strcasecmp(f, "nonblock") == 0)
-		err = set_nonblock(v, iop);
- 	else if (strcasecmp(f, "port") == 0) {
-		sop->tls_port = malloc(vlen + 1);
-		strncpy(sop->tls_port, v, vlen + 1);
-		sop->port = strtonum(v, 1, 65535, &s);
-		if (s != NULL)
-		    log_syserr("strtonum() error: %s\n", s);
+	    err = set_nonblock(v, iop);
+	else if (strcasecmp(f, "port") == 0) {
+	    sop->tls_port = malloc(vlen + 1);
+	    strncpy(sop->tls_port, v, vlen + 1);
+	    sop->port = strtonum(v, 1, 65535, &s);
+	    if (s != NULL)
+		log_syserr("strtonum() error: %s\n", s);
 	} else if (strcasecmp(f, "tls") == 0)
-		sop->tls = TRUE;
+	    sop->tls = TRUE;
 	else if (strcasecmp(f, "cacert") == 0) {
-		sop->cacert_path = malloc(vlen + 1);
-		strncpy(sop->cacert_path, v, vlen + 1);
+	    sop->cacert_path = malloc(vlen + 1);
+	    strncpy(sop->cacert_path, v, vlen + 1);
 	} else if (strcasecmp(f, "cacertdir") == 0) {
-		sop->cacert_dirpath = malloc(vlen + 1);
-		strncpy(sop->cacert_dirpath, v, vlen);
+	    sop->cacert_dirpath = malloc(vlen + 1);
+	    strncpy(sop->cacert_dirpath, v, vlen);
 	} else if (strcasecmp(f, "host_cert") == 0) {
-		sop->host_cert = malloc(vlen + 1);
-		strlcpy(sop->host_cert, v, vlen + 1);
+	    sop->host_cert = malloc(vlen + 1);
+	    strlcpy(sop->host_cert, v, vlen + 1);
 	} else if (strcasecmp(f, "host_key") == 0) {
-		sop->host_key = malloc(vlen + 1);
-		strlcpy(sop->host_key, v, vlen + 1);
+	    sop->host_key = malloc(vlen + 1);
+	    strlcpy(sop->host_key, v, vlen + 1);
 	} else if (strcasecmp(f, "ssh_cmd") == 0) {
-		sop->ssh_cmd = malloc(vlen + 1);
-		strlcpy(sop->ssh_cmd, v, vlen + 1);
+	    sop->ssh_cmd = malloc(vlen + 1);
+	    strlcpy(sop->ssh_cmd, v, vlen + 1);
 	} else if (strcasecmp(f, "pipe_cmd") == 0) {
-		iop->pipe_cmd = malloc(vlen + 1);
-		strlcpy(iop->pipe_cmd, v, vlen + 1);
+	    iop->pipe_cmd = malloc(vlen + 1);
+	    strlcpy(iop->pipe_cmd, v, vlen + 1);
 	} else if (strcasecmp(f, "reqcrt") == 0) {
-		if (strcasecmp(v, "true") == 0)
-		    sop->cert_vrfy = TRUE;
-		else if (strcasecmp(v, "false") == 0)
-		    sop->cert_vrfy = FALSE;
-		else
-		    log_die("Bad value for 'reqcrt' param");
+	    if (strcasecmp(v, "true") == 0)
+		sop->cert_vrfy = TRUE;
+	    else if (strcasecmp(v, "false") == 0)
+		sop->cert_vrfy = FALSE;
+	    else
+		log_die("Bad value for 'reqcrt' param");
 	} else if (strcasecmp(f, "bufsz") == 0) {
-		iop->buf_sz = strtonum(v, 1, 16384, &s);
-		if (s != NULL) {
-		    log_die("bufsz value error: %s\n", s);
-		}
+	    iop->buf_sz = strtonum(v, 1, 16384, &s);
+	    if (s != NULL) {
+		log_die("bufsz value error: %s\n", s);
+	    }
 	} else {
-		log_msg("unknown value: %s %s\n", f, v);
-		err = -1;
+	    log_msg("unknown value: %s %s\n", f, v);
+	    err = -1;
 	}
-
 	return(err);
 }
 
 int set_nonblock(char *t, struct io_params *iop)
 {
 	if (strcasecmp(t, "TRUE") == 0)
-		iop->nonblock = TRUE;
+	    iop->nonblock = TRUE;
 	else if (strcasecmp(t, "FALSE") == 0)
-		iop->nonblock = FALSE;
+	    iop->nonblock = FALSE;
 	else
-		return (-1);
+	    return (-1);
 
 	return(0);
 }
 
-int set_conn(char *t, struct io_params *iop) 
-{	
+int set_conn(char *t, struct io_params *iop)
+{
 	int err = 0;
 
-        if (strcasecmp(t, "CLIENT") == 0)
-		iop->sock_data->conn_type = CLIENT;
-        else if (strcasecmp(t, "SERVER") == 0)
-		iop->sock_data->conn_type = SRVR;
-        else {
-                log_msg("unknown connection type: %s\n", t);
-                err = -1;
-        }
+	if (strcasecmp(t, "CLIENT") == 0)
+	    iop->sock_data->conn_type = CLIENT;
+	else if (strcasecmp(t, "SERVER") == 0)
+	    iop->sock_data->conn_type = SRVR;
+	else {
+	    log_msg("unknown connection type: %s\n", t);
+	    err = -1;
+	}
 
 	return err;
-
 }
 
 int set_sockio(char *t, struct io_params *iop)
 {	
 	int err = 0;
 
-        if (strcasecmp(t, "DGRAM") == 0)
-         	iop->sock_data->sockio = DGRAM;
-        else if (strcasecmp(t, "STREAM") == 0)
-		iop->sock_data->sockio = STREAM;
-        else {
-                log_msg("unknown proto: %s\n", t);
-                err -1;
-        }
+	if (strcasecmp(t, "DGRAM") == 0)
+	    iop->sock_data->sockio = DGRAM;
+	else if (strcasecmp(t, "STREAM") == 0)
+	    iop->sock_data->sockio = STREAM;
+	else {
+	    log_msg("unknown proto: %s\n", t);
+	    err -1;
+	}
 
 	return err; 
 }	
@@ -236,7 +234,7 @@ int set_desc_t(char *t, struct io_params *iop)
 }
 
 char * clean_line(char *s)
-{	 
+{
 	s = rm_end_space(s);
 	return rm_space(s);
 }
@@ -245,30 +243,31 @@ char *
 rm_end_space(char *l)
 {
 	while ( strncmp( &l[ strlen(l) - 1 ], "\n", 1) == 0 || \
-                isblank(l[ strlen(l) - 1 ])) {
-                l[ strlen(l) - 1 ] = '\0';
-        }
+	    isblank(l[ strlen(l) - 1 ])) {
+	    l[ strlen(l) - 1 ] = '\0';
+	}
 	return l;
 }
 
-char *   
+char *
 rm_space(char *s)
 {
-        while (isblank(s[0]) != 0)
-            s++;
+	while (isblank(s[0]) != 0)
+	    s++;
+
         return s;
-}        
+}
 
 int check_line(char *l)
 {
-        if (strncmp(l, "#", 1) == 0)
-                return 1;
+	if (strncmp(l, "#", 1) == 0)
+	    return 1;
 
-        if (strncmp(l, "\n", 1) == 0)
-                return 1;
-	
-        if (strlen(l) == 0)
-                return 1;
-        
-        return 0;
+	if (strncmp(l, "\n", 1) == 0)
+	    return 1;
+
+	if (strlen(l) == 0)
+	    return 1;
+
+	return 0;
 }
