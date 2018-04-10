@@ -115,10 +115,10 @@ int main(int argc, char *argv[])
 	 */
 
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
-	    iop_setup(iocfg);
+	    validate_cfg(iocfg);
 
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
-	    validate_cfg(iocfg);
+	    iop_setup(iocfg);
 
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
 	    show_config(iocfg);
@@ -590,7 +590,8 @@ void copy_io_params(struct io_params *src, struct io_params *dst)
 	if (src->path != NULL) {
 	    if ((dst->path = malloc(strlen(src->path) + 1)) == NULL)
 		log_syserr("malloc() error\n");
-	    strlcpy(dst->path, dst->path, strlen(src->path) + 1);
+
+	    strlcpy(dst->path, src->path, strlen(src->path) + 1);
 	}
 
 	if (src->pipe_cmd != NULL) {

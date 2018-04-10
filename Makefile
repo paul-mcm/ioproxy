@@ -43,7 +43,7 @@ ifeq ($(UNAME), Linux)
 	CCFLAGS = -D ${OS} -lbsd -I/opt/include -L/opt/lib 
 endif
 
-objects = rbuf.o config.o parse_line.o ftypes.o error.o
+objects = config.o parse_line.o ftypes.o error.o rbuf.o
 
 all: $(objects)
 	@$(CC) $(CCFLAGS) -g -ltls -lssh -lssh_threads -I${INCLUDES} -L${LIBS} -pthread -o ioproxyd main.c $(objects) 

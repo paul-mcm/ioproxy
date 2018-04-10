@@ -199,4 +199,7 @@ int compare_io_params(struct io_params *, struct io_params *);
 int cnt_secondaries(struct iop0_params *);
 struct iop0_params *compare_iop0(struct io_cfg *, struct io_cfg *);
 
+char *fetch_next_line(FILE *, int *);
+int check_endcfg(char *);
+
 #endif

@@ -38,8 +38,12 @@ int read_config(struct all_cfg_list *all, char *cfg_file)
 	while (fgets(ln, SIZE, fp) != NULL) {
 	    p = ln;
 	    if (strncmp(p, "{", 1) == 0) {
-		fseek(fp, -(strlen(p) - 1), SEEK_CUR);
-		iocfg = parse_config(fp);
+		/* REWIND UP TO POINT JUST AFTER "{" */
+		fseek(fp, -(strlen(ln) - 1), SEEK_CUR);
+
+		if ((iocfg = parse_config(fp)) == NULL)
+		    log_die("Fatal config error. Exiting");
+
 		set_cfg_type(iocfg);
 		LIST_INSERT_HEAD(all, iocfg, io_cfgs);
 	    }
@@ -54,19 +58,19 @@ int read_config(struct all_cfg_list *all, char *cfg_file)
 
 struct io_cfg *parse_config(FILE *fp)
 {
-	char ln[SIZE];
+	char *ln;
 	char *p;
 	struct io_cfg *iocfg;
 	struct io_params *iop;
 	struct iop0_params *iop0;
 	struct iop1_params *iop1;
-	int r;
+	int r, len;
                 
 	/* IN CONFIG STANZA */
 	iocfg = io_cfg_alloc();
 
 	if ((iop0 = parse_iop0_stanza(fp)) == NULL) {
-	    log_msg("parse_iop0_stanza error\n");
+	    free(iocfg);
 	    return NULL;
 	} else {
 	    LIST_INSERT_HEAD(&iocfg->iop0_paths, iop0, iop0_paths);
@@ -80,65 +84,10 @@ struct io_cfg *parse_config(FILE *fp)
 		iop1->iop = iop;
 		LIST_INSERT_HEAD(&iop0->io_paths, iop1, io_paths);
 	    } else {
-		log_msg("parse_io_cfg error");
-		return NULL;
-	    }
-
-	    /* read next line until readable line */
-	    while (fgets(ln, SIZE, fp) != NULL) {
-		p = clean_line(ln);
-
-		/* IF COMMENT -> CONTINUE ....*/
-		if (check_line(p) != 0)
-		    continue;
-		else
-		    break;
-	    }
-	    if (strncmp(p, "(", 1) == 0) {
-		fseek(fp, -(strlen(p) + 1), SEEK_CUR);
-		continue;
-	    } else if (strncmp(p, "}", 1) == 0) {
 		break;
 	    }
         }
 	return iocfg;
-}
-
-char * fetch_next_line(FILE *f)
-{
-	char	*ln, *p;
-	int	n_bytes;
-
-	for (;;) {
-	    ln = NULL;
-
-	    n_bytes = (line_byte_cnt(f));
-	    if (n_bytes == 0) {
-		return NULL;	/* EOF */
-	    }
-
-	    if ((ln = malloc((size_t)(n_bytes + 1))) == NULL)
-		log_syserr("malloc error while reading config file", errno);
-
-	    if (fgets(ln, n_bytes + 1, f) == NULL) {
-		if (feof(f)) {
-		    free(ln);
-		    return NULL;
-		} else {
-		    /* FATAL */
-		    free(ln);
-		    log_die("error calling fgets on config file", errno);
-		}
-	    }
-	    p = clean_line(ln);
-	    if (check_line(p) != 0) {
-		free(ln);
-		continue;
-	    } else {
-		break;
-	    }
-	}
-	return ln;
 }
 
 struct iop0_params * parse_iop0_stanza(FILE *f)
@@ -146,17 +95,40 @@ struct iop0_params * parse_iop0_stanza(FILE *f)
 	struct iop0_params *iop0;
 	char *ln;
 	char *p;
-	int r;
+	int len, r;
 
 	iop0 = iop0_alloc();
 	iop0->iop = iop_alloc();
 
-	while ((ln = fetch_next_line(f)) != NULL) {
+
+	/* CONFIRM CFG DATA FOR PRIMARY EXISTS BEFORE ENCOUNTERING '(' */
+	if ((ln = fetch_next_line(f, &len)) != NULL) {
 	    p = clean_line(ln);
+	    if (strncmp(p, "(", 1) == 0) {
+		free(ln);
+		log_msg("Config error: secondary found before primary");
+		return NULL;
+	    }
+	} else {
+	    log_msg("Config error: encountered EOF before config complete");
+	    return NULL;
+	}
+
+	do {
+	    p = clean_line(ln);
+
 	    /* '(' character signals end of stanza */
 	    if (strncmp(p, "(", 1) == 0) {
-		fseek(f, -(strlen(ln)), SEEK_CUR);
+		/* REWIND TO FIRST BYTE JUST AFTER '(' */
+		r = strcspn(ln, "(");
+		fseek(f, -(len - r), SEEK_CUR);
+		free(ln);
+
 		break;
+	    } else if (strncmp(p, "}", 1) == 0) {
+		free(ln);
+		log_msg("Config error: I/O config has no secondaries");
+		return NULL;
 	    }
 
 	    if ((r = parse_line(p, iop0->iop)) < 0) {
@@ -164,34 +136,50 @@ struct iop0_params * parse_iop0_stanza(FILE *f)
 		free(ln);
 		return NULL;
 	    }
-	}
+	    free(ln);
 
-	free(ln);
+	} while ((ln = fetch_next_line(f, &len)) != NULL); /* ln MUST BE FREED */
+
 	return iop0;
 }
 
 struct io_params *parse_io_cfg(FILE *f)
 {
-	char ln[SIZE];
-	char *p = ln;
-	int r;
+	char *p, *ln;
+	int len, r;
 	int last = 0;
 	struct io_params *iop;
 
 	iop = iop_alloc();
 
-	/* XXX NEED TO SUPPORT ARBITRARY LINE LENGTHS */
-	while (fgets(ln, SIZE, f) != NULL) {
+	/* CONFIRM CFG DATA FOR SECONDARY EXISTS BEFORE ENCOUNTERING '|' OR '}' */
+	if ((ln = fetch_next_line(f, &len)) != NULL) {
 	    p = clean_line(ln);
 
-	    /* IF COMMENT -> CONTINUE ....*/
-	    if (check_line(p) != 0)
-		continue;
+	    if ((r = check_endcfg(p)) == 0) { /* End of iocfg */
+		return NULL;
+	    } else if (r == -1) {
+		log_die("Exiting due to config file error\n");
+	    }
+	} else {
+	    log_die("Config error: encountered EOF before config complete");
+	}
 
-	    if (strncmp(p, ")", 1) == 0)
+	do {
+	    p = clean_line(ln);
+
+	    if (strncmp(p, ")", 1) == 0) {
+		free(ln);
 		break;
+	    }
 
-	    if (strncmp(&p[0], "(", 1) == 0 ) /* EAT FIRST '(' */
+	    if (strncmp(p, "}", 1) == 0) {
+		log_msg("Config error: '}' found before terminating secondary ')'");
+		free(ln);
+		return NULL;
+	    }
+
+	    if (strncmp(&p[0], "(", 1) == 0 && strlen(p) > 1 ) /* EAT FIRST '(' */
 		p++;
 
 	    if (strncmp(&p[ strlen(p) - 1 ], ")", 1) == 0 ) {
@@ -202,13 +190,72 @@ struct io_params *parse_io_cfg(FILE *f)
 
 	    if ((r = parse_line(p, iop)) < 0 ) {
 		log_msg("Error parsing line\n");
+		free(ln);
 		return NULL;
 	    }
 
-	    if (last)
+	    if (last) {
+		free(ln);
 		break;
-	}
+	    }
+	    free(ln);
+
+	} while ((ln = fetch_next_line(f, &len)) != NULL); /* ln MUST BE FREED */
 	return iop;
+}
+
+char *fetch_next_line(FILE *f, int *n)
+{
+	char	*p, *ln;
+	int	n_bytes;
+
+	for (;;) {
+	    ln = NULL;
+
+	    n_bytes = (line_byte_cnt(f));
+	    if (n_bytes == 0) {
+		return NULL;	/* EOF */
+	    }
+	    if ((ln = malloc((size_t)(n_bytes + 1))) == NULL)
+		log_syserr("malloc error while reading config file", errno);
+
+	    if (fgets(ln, (n_bytes + 1), f) == NULL) {
+		if (feof(f)) {
+		    free(ln);
+		    return NULL;
+		} else {
+		    /* FATAL */
+		    free(ln);
+		    log_die("error calling fgets on config file", errno);
+		}
+	    }
+
+	    p = clean_line(ln);
+	    if (check_line(p) != 0) {
+		free(ln);
+		continue;
+	    } else {
+		break;
+	    }
+	}
+	*n = n_bytes;
+	return ln;
+}
+
+int check_endcfg(char *l)
+{
+	char	*p, *ln;
+	int	r, len;
+
+	if (strncmp(l, "}", 1) == 0)
+		return 0;
+
+	if (strncmp(l, "(", 1) == 0) /* new secondary? */
+	    return 1;
+
+	/* FALL THROUGH */
+	log_msg("Cfg error: expected ')' or '}'");
+	return -1;
 }
 
 int is_dst(struct io_params *iop)
@@ -607,6 +654,10 @@ int validate_cfg(struct io_cfg *iocfg)
 	struct iop1_params	*iop1;
 
 	iop0 = LIST_FIRST(&iocfg->iop0_paths);
+
+	if (cnt_secondaries(iop0) == 0)
+	    log_die("No secondary io streams provided\n");
+
 	validate_iop(iop0->iop);
 
 	LIST_FOREACH(iop1, &iop0->io_paths, io_paths)
