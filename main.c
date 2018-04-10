@@ -35,6 +35,8 @@ int main(int argc, char *argv[])
 	struct rlimit           rlim_ptr;
 	int			sig, r;
 	char			*host_file = '\0';
+	char			*hostlist = NULL;
+	char			*cmd = NULL;
 	char			ch;
 	int			daemonize;
 
@@ -45,7 +47,7 @@ int main(int argc, char *argv[])
 	else
 	    daemonize = FALSE;
 
-	while ((ch = getopt(argc, argv, "dH:f:")) != -1) {
+	while ((ch = getopt(argc, argv, "c:dh:H:f:")) != -1) {
 	    switch (ch) {
 	    case 'f':
 		config_file = optarg;
@@ -58,6 +60,12 @@ int main(int argc, char *argv[])
 	    case 'd':
 		debug = TRUE;
 		daemonize = FALSE;
+		break;
+	    case 'c':
+		cmd = optarg;
+		break;
+	    case 'h':
+		hostlist = optarg;
 		break;
 	    case '?':
 		log_die("Exiting\n");
@@ -108,7 +116,16 @@ int main(int argc, char *argv[])
 	ssh_init();
 
 	LIST_INIT(&all_cfg);
-	read_config(&all_cfg, config_file);
+
+	if (cmd) {
+	    if (!hostlist && !host_file) {
+		log_die("-c option requires either -H or -h");
+	    } else {
+		load_cmd(&all_cfg, cmd, hostlist, host_file);
+	    }
+	} else {
+	    read_config(&all_cfg, config_file);
+	}
 
 	/* ITERATE OVER EACH CFG IN all_cfg AND 
 	 * START CONTROL THREAD.
@@ -777,4 +794,54 @@ int sigrecvd(void)
 	    MTX_UNLOCK(&sighupstat_lock);
 	}
 	return 0;
+}
+
+int load_cmd(struct all_cfg_list *cfg, char *c, char *list, char *file)
+{
+	struct io_cfg		*iocfg;
+	struct iop0_params	*iop0;
+	struct iop1_params	*iop1;
+	struct io_params	*iop;
+	struct sock_param	*sop;
+	char *h;
+
+	iocfg = io_cfg_alloc();
+	iop0  = iop0_alloc();
+	iop0->iop = iop_alloc();
+
+	iop = iop0->iop;
+	iop->io_drn = DST;
+	iop->io_type = STDOUT;
+
+	for (;;) {
+	    h = strsep(&list, ":");
+	    if (h == NULL)
+		break;
+
+	    iop1 = iop1_alloc();
+	    iop1->iop = iop_alloc();
+	    iop1->iop->sock_data = sock_param_alloc();
+	    iop = iop1->iop;
+	    sop = iop->sock_data;
+
+	    iop->io_type = SSH;
+
+	    if ((sop->hostname = malloc(strlen(h) + 1)) == NULL)
+		log_syserr("malloc() error");
+
+	    strlcpy(sop->hostname, h, strlen(h) + 1);
+
+	    if ((sop->ssh_cmd = malloc(strlen(c) + 1)) == NULL)
+		log_syserr("malloc() error");
+
+	    strlcpy(sop->ssh_cmd, c, strlen(c) + 1);
+
+	    LIST_INSERT_HEAD(&iop0->io_paths, iop1, io_paths);
+	}
+
+	LIST_INSERT_HEAD(&iocfg->iop0_paths, iop0, iop0_paths);
+
+	set_cfg_type(iocfg);
+
+	LIST_INSERT_HEAD(cfg, iocfg, io_cfgs);
 }
