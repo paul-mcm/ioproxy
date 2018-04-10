@@ -100,7 +100,6 @@ struct iop0_params * parse_iop0_stanza(FILE *f)
 	iop0 = iop0_alloc();
 	iop0->iop = iop_alloc();
 
-
 	/* CONFIRM CFG DATA FOR PRIMARY EXISTS BEFORE ENCOUNTERING '(' */
 	if ((ln = fetch_next_line(f, &len)) != NULL) {
 	    p = clean_line(ln);
@@ -139,6 +138,11 @@ struct iop0_params * parse_iop0_stanza(FILE *f)
 	    free(ln);
 
 	} while ((ln = fetch_next_line(f, &len)) != NULL); /* ln MUST BE FREED */
+
+	if (iop0->iop->io_drn == -1) {
+	    log_msg("primary io config missing direction; no 'dir' keyword found");
+	    return NULL;
+	}
 
 	return iop0;
 }
@@ -529,6 +533,7 @@ struct io_params *iop_alloc(void)
 	bzero(iop, sizeof(struct io_params));
 	iop->path = NULL;
 	iop->pipe_cmd = NULL;
+	iop->io_drn = -1;
 	iop->io_fd = -1;
 	iop->sock_data = NULL;
 	iop->buf_sz = BUFF_SIZE;
