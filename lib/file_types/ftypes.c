@@ -177,16 +177,16 @@ int open_sshsession(struct io_params *iop)
 	if ((r = ssh_userauth_publickey_auto(sop->ssh_s, NULL, NULL)) == SSH_AUTH_SUCCESS) {
 	    log_msg("SSH auth success to %s\n", sop->hostname);
         } else if (r == SSH_AUTH_ERROR) {
-            printf("Serious error happened\n");
+            log_msg("SSH authentication error\n");
 	    return -2;
         } else if (r = SSH_AUTH_DENIED) {
-            printf("auth denied\n");
+            log_msg("SSH authenticatioin denied\n");
 	    return -2;
         } else if (r = SSH_AUTH_PARTIAL) {
-            printf("auth partial\n");
+            log_msg("SSH partial authentication\n");
 	    return -1;
         } else if (r = SSH_AUTH_AGAIN) {
-            printf("again\n");
+            log_msg("SSH auth again\n");
 	    return -1;
         }
 
@@ -197,7 +197,7 @@ int open_sshsession(struct io_params *iop)
 	r = ssh_channel_open_session(sop->ssh_chan);
 
         if (r != SSH_OK) {
-	    printf("NOT OK\n");
+	    log_msg("SSH channel no SSH_OK\n");
             ssh_channel_free(sop->ssh_chan);
             return -1;
         }
