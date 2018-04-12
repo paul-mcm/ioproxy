@@ -161,18 +161,21 @@ int open_sshsession(struct io_params *iop)
         r = ssh_connect(sop->ssh_s);
 
         if (r != SSH_OK) {
-            log_msg("Error connecting to host: %s %s\n",
-             h, ssh_get_error(sop->ssh_s));
+	    ssh_free(sop->ssh_s);
+            log_msg("Error connecting to host: %s %s",
+	    h, ssh_get_error(sop->ssh_s));
             return (-2);
         }
 
-        if (verify_knownhost(sop->ssh_s) < 0) {
-           log_msg("host verification failed\n");
-           return(-2);
-        }
+	if (ssh_is_server_known(sop->ssh_s) != SSH_SERVER_KNOWN_OK) {
+	    log_msg("SSH Host Verification failed for host %s", h);
+	    ssh_disconnect(sop->ssh_s);
+	    ssh_free(sop->ssh_s);
+	    return(-2);
+	}
 
 	if ((r = ssh_userauth_publickey_auto(sop->ssh_s, NULL, NULL)) == SSH_AUTH_SUCCESS) {
-            printf("SSH auth success\n");
+	    log_msg("SSH auth success to %s\n", sop->hostname);
         } else if (r == SSH_AUTH_ERROR) {
             printf("Serious error happened\n");
 	    return -2;
@@ -448,7 +451,6 @@ int do_accept(struct io_params *iop)
 
 int do_connect(struct io_params *iop)
 {
-
 	if (iop->io_type == UNIX_SOCK)
 	    return do_localconnect(iop);
 	else if (use_tls(iop)) {
@@ -622,72 +624,6 @@ int set_flags(struct io_params *iop)
 		f |= O_NONBLOCK;
 
 	return f;
-}
-
-int verify_knownhost(ssh_session session)
-{
-
-	int             state, hlen;
-	unsigned char   *hash = NULL;
-	char            *hexa;
-	char            buf[10];
-	ssh_key		k;
-        unsigned char	*h;
-	size_t		*len;
-
-        state = ssh_is_server_known(session);
-
-	if (ssh_get_publickey(session, &k) == SSH_ERROR)
-	    log_msg("Failed to get public key\n");
-
-	if (ssh_get_publickey_hash(k, 1, &h, len) < 0) {
-	    printf("hash failure\n");
-	    return -1;
-	}
-
-        switch (state)
-        {
-            case SSH_SERVER_KNOWN_OK:
-                break; /* ok */
-            case SSH_SERVER_KNOWN_CHANGED:
-                log_msg("Host key for server changed");
-                ssh_clean_pubkey_hash(&h);
-                return -1;
-            case SSH_SERVER_FOUND_OTHER:
-                log_msg("Host key for this server not found; another type of key exists.\n");
-                ssh_clean_pubkey_hash(&h);
-                return -1;
-            case SSH_SERVER_FILE_NOT_FOUND:
-                log_msg("Host file not found.\n");
-            case SSH_SERVER_NOT_KNOWN:
-                hexa = ssh_get_hexa(hash, hlen);
-                log_msg("The server is unknown. Do you trust the host key?\n");
-                fprintf(stderr, "Public key hash: %s\n", hexa);
-                free(hexa);
-
-                if (fgets(buf, sizeof(buf), stdin) == NULL) {
-		    ssh_clean_pubkey_hash(&h);
-                    return -1;
-                }
-
-                if (strncasecmp(buf, "yes", 3) != 0) {
-                    ssh_clean_pubkey_hash(&h);
-                    return -1;
-                }
-
-                if (ssh_write_knownhost(session) < 0) {
-                    fprintf(stderr, "Error %s\n", strerror(errno));
-                    ssh_clean_pubkey_hash(&h);
-                    return -1;
-                }
-                break;
-            case SSH_SERVER_ERROR:
-                fprintf(stderr, "Error %s", ssh_get_error(session));
-                ssh_clean_pubkey_hash(&h);
-                return -1;
-        }
-        ssh_clean_pubkey_hash(&h);
-        return 0;
 }
 
 void config_cacert(struct sock_param *sop, struct tls_config *cfg)

@@ -21,6 +21,7 @@ volatile sig_atomic_t	SIGHUP_STAT;
 volatile sig_atomic_t	SIGTERM_STAT;
 pthread_mutex_t		sighupstat_lock;
 pthread_mutex_t		sigtermstat_lock;
+pthread_mutex_t		iocfg_lock;
 pthread_cond_t		thrd_stat;
 int			thread_cnt;
 pthread_barrier_t	thrd_b;
@@ -109,6 +110,9 @@ int main(int argc, char *argv[])
 	if (pthread_mutex_init(&sighupstat_lock, NULL) != 0)
 	    log_syserr("mutex init error");
 
+	if (pthread_mutex_init(&iocfg_lock, NULL) != 0)
+	    log_syserr("mutex init error");
+
 	if (pthread_mutex_init(&sigtermstat_lock, NULL) != 0)
 	    log_syserr("mutex init error");
 
@@ -175,6 +179,7 @@ void iop_setup(struct io_cfg *iocfg)
 	    iop0->iop->r_ptr = iop0->iop->rbuf_p;
 	    iop0->iop->listready = malloc(sizeof(int));
 	    *iop0->iop->listready = 0;
+	    iop0->iop->iop1_p = &iop0->io_paths;
 
 	    LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
 		iop1->iop->rbuf_p	= iop0->iop->rbuf_p;
@@ -187,6 +192,7 @@ void iop_setup(struct io_cfg *iocfg)
 		iop1->iop->io_fd	= iop0->iop->io_fd;
 		iop1->iop->io_thread	= io_thread;
 		iop1->iop->io_drn 	= DST;
+		iop1->iop->iop1_p	= NULL;
 	    }
 
 	} else if (iocfg->cfg_type == TYPE_3) {
@@ -218,6 +224,7 @@ void iop_setup(struct io_cfg *iocfg)
 		newiop0->iop->rbuf_p = new_rbuf(iocfg->cfg_type, newiop0->iop->buf_sz);
 		newiop0->iop->w_ptr = newiop0->iop->rbuf_p;
 		newiop0->iop->r_ptr = newiop0->iop->rbuf_p;
+		newiop0->iop->iop1_p = &newiop0->io_paths;
 
 		newiop1->iop->io_thread = io_t3_thread;
 
@@ -233,6 +240,7 @@ void iop_setup(struct io_cfg *iocfg)
 		newiop1->iop->readable 	= newiop0->iop->readable;
 
 		newiop1->iop->io_fd	= newiop0->iop->io_fd;
+		newiop1->iop->iop1_p	= NULL;
 
 		LIST_INSERT_HEAD(&newiop0->io_paths, newiop1, io_paths);
 		LIST_INSERT_HEAD(&iocfg->iop0_paths, newiop0, iop0_paths);
@@ -336,13 +344,15 @@ void *iop0_thrd(void *arg)
 	if (pthread_create(&iop->tid, NULL, io_thread, (void *)iop) != 0)
 	    log_die("pthread_create() error");
 
+	/* ENSURE iop->tid SET TO SOME VALUE FOR ALL iop0 THREADS */
+	pthread_barrier_wait(&thrd_b);
+
 	LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
 	    if (pthread_create(&iop1->iop->tid, NULL, iop1->iop->io_thread, (void *)iop1->iop) != 0)
 		log_die("error pthread_create()");
 	}
 
 	r = pthread_join(iop->tid, NULL);
-
 	r = cancel_threads(iop0);
 
 	/* ALL I/O THREADS SHOULD BE GONE BY THIS POINT */
@@ -356,7 +366,20 @@ void *iop0_thrd(void *arg)
 	    }
 	}
 
-	pthread_exit((void *)0);
+	/* IF WE'RE THE LAST THREAD, CALL EXIT */
+	MTX_LOCK(&iocfg_lock);
+	iop->tid = NULL;
+	LIST_FOREACH(iocfg, &all_cfg, io_cfgs) {
+	    LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths) {
+		if (iop0->iop->tid != NULL) {
+		    MTX_UNLOCK(&iocfg_lock);
+		    pthread_exit((void *)0);
+		}
+	    }
+	}
+	MTX_UNLOCK(&iocfg_lock);
+	/* IF HERE, THEN WE'RE LAST THREAD AND SHOULD EXIT PROG */
+	exit(0);
 }
 
 void *io_t3_thread(void *arg)
@@ -384,17 +407,12 @@ void *io_t3_thread(void *arg)
 	for (;;) {
 	    if (*iop->iofd_p < 0) {
 		pthread_mutex_lock(&iop->fd_lock);
+	    }
 
-		if (*iop->iofd_p > 0) {
-		    pthread_mutex_unlock(&iop->fd_lock);
-		} else {
-		    if (is_netsock(iop))
-			log_msg("opening fd for %s\n", sop->hostname);
-		    else
-			log_msg("opening dscrptr for %s\n", iop->path);
-
-		    r = open_desc(iop);
-		}
+	    if (*iop->iofd_p > 0) {
+		pthread_mutex_unlock(&iop->fd_lock);
+	    } else {
+		r = open_desc(iop);
 		if (r == -2) { /* NON RECOVERABLE ERROR */
 		    pthread_mutex_unlock(&iop->fd_lock);
 		    break;
@@ -405,9 +423,15 @@ void *io_t3_thread(void *arg)
 		    continue;
 		} else {
 		    *iop->iofd_p = r;
+		    iop->io_fd = r;
 		    pthread_mutex_unlock(&iop->fd_lock);
 		}
+	    }
 
+	    if (*iop->cfgtype_p == TYPE_3) {
+		MTX_LOCK(&iop->fd_lock);
+		iop->io_fd = dup(*iop->iofd_p);
+		MTX_UNLOCK(&iop->fd_lock);
 	    }
 
 	    /* BLOCK */	
@@ -422,7 +446,7 @@ void *io_t3_thread(void *arg)
 	    /* ONLY HERE IF DESCRIPTOR CLOSED */
 	    if (is_netsock(iop) || iop->io_type == FIFO) {
 		close_desc(iop);
-		*iop->iofd_p = -1;
+		iop->io_fd = -1;
 	    }
 
 	    if (r == -2) {
@@ -436,9 +460,9 @@ void *io_t3_thread(void *arg)
 	if (iop->io_type == UNIX_SOCK && unlink(iop->path) != 0)
 	    log_ret("unlink error: %s, %s\n", iop->path);	
 
-	log_msg("T3 io_thread returning for %s %p\n", iop->path, iop);
-	pthread_exit((void *)0);
+	release_locks((void *)iop);
 	pthread_cleanup_pop(0);
+	pthread_exit((void *)0);
 }
 
 void *io_thread(void *arg)
@@ -456,10 +480,6 @@ void *io_thread(void *arg)
 	pthread_cleanup_push(release_locks, arg);
 	for (;;) {
 	    if (iop->io_fd < 0) {
-		if (is_netsock(iop))
-		    log_msg("creating socket for %s\n", sop->ip);
-		else
-		    log_msg("opening dscrptr for %s\n", iop->path);
 
 		/* Returns:
 		 *  -2 = non-recoverable error
@@ -517,8 +537,12 @@ void *io_thread(void *arg)
 	if (iop->io_type == UNIX_SOCK && unlink(iop->path) != 0)
 	    log_ret("unlinkk error: %s %s\n", iop->path, errno);
 
+	if (is_src(iop)) {
+	    LIST_FOREACH(iop1, iop->iop1_p, io_paths)
+		close_desc(iop1->iop);
+	}
+
 	release_locks((void *)iop);
-	log_msg("io_thread returning for %s\n", iop->path);
 	pthread_cleanup_pop(0);
 	pthread_exit((void *)0);
 }
@@ -758,15 +782,14 @@ int cancel_threads(struct iop0_params *iop0)
 	sleep(1);  /* Give some time for threads to exit themselves */
 
 	LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
+	    close_desc(iop1->iop);
 	    if ((r = pthread_cancel(iop1->iop->tid)) != 0) {
 		log_msg("pthread_cancel() failed: %d\n", r);
 		continue;
 	    }
 	}
 	LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
-	    if (pthread_join(iop1->iop->tid, NULL) == 0) {
-		log_msg("pthread_join() returned for : %s\n", iop1->iop->path);
-	    } else {
+	    if (pthread_join(iop1->iop->tid, NULL) != 0) {
 		log_msg("pthread_join() returned badly!\n");
 	    }
 	    n++;

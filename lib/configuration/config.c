@@ -291,8 +291,9 @@ int is_sock(struct io_params *iop)
 
 int is_netsock(struct io_params *iop)
 {
-	if ((iop->io_type == UDP_SOCK) || \
-	    (iop->io_type == TCP_SOCK))
+	if ((iop->io_type == UDP_SOCK)	|| \
+	    (iop->io_type == TCP_SOCK)	|| \
+	    (iop->io_type == SSH))
 		return 1;
 	else
 	    return 0;
@@ -346,57 +347,57 @@ void print_config_params(struct io_params *iop)
 	struct sock_param *sop;
 	sop = iop->sock_data;
 
-	printf("cfgtype_p\t\t%s\n", cfg_types[*iop->cfgtype_p]);
-	printf("io_drn:\t\t%s\n", io_drn[iop->io_drn]);
-	printf("io_type:\t\t%s\n", io_types[iop->io_type]);
-	printf("rbuf_p addr: %p\n", iop->rbuf_p);
-	printf("io_fd ptr: %p\n", iop->io_fd);
-	printf("fd_lock ptr: %p\n", iop->fd_lock);
-	printf("buf_sz: %d\n", iop->buf_sz);
+	log_msg("cfgtype_p\t\t%s", cfg_types[*iop->cfgtype_p]);
+	log_msg("io_drn:\t\t%s", io_drn[iop->io_drn]);
+	log_msg("io_type:\t\t%s", io_types[iop->io_type]);
+	log_msg("rbuf_p addr: %p", iop->rbuf_p);
+	log_msg("io_fd ptr: %p", iop->io_fd);
+	log_msg("fd_lock ptr: %p", iop->fd_lock);
+	log_msg("buf_sz: %d", iop->buf_sz);
 
 	if (iop->pipe_cmd != NULL)
-	    printf("pipe_cmd:\t\t%s\n", iop->pipe_cmd);
+	    log_msg("pipe_cmd:\t\t%s", iop->pipe_cmd);
 
-	printf("nonblock: %d\n", iop->nonblock);
-	printf("io_fd: %d\n", iop->io_fd);
-	printf("path: %s\n", iop->path != NULL ? iop->path : NULL);
+	log_msg("nonblock: %d", iop->nonblock);
+	log_msg("io_fd: %d", iop->io_fd);
+	log_msg("path: %s", iop->path != NULL ? iop->path : NULL);
 
 	if (use_ssh(iop)) {
-	    printf("------------- ssh data ---------------\n");
+	    log_msg("------------- ssh data ---------------");
 	    if (sop->hostname != NULL)
-		printf("hostname: %s\n", sop->hostname);
+		log_msg("hostname: %s", sop->hostname);
 
 	    if (sop->ip != NULL)
-		printf("ip: %s\n", sop->ip);
+		log_msg("ip: %s", sop->ip);
 
-	    printf("Command: %s\n", sop->ssh_cmd);
+	    log_msg("Command: %s", sop->ssh_cmd);
 	} else if (is_sock(iop) && iop->io_type != SSH) {
-	    printf("----- sock_data -----\n");
-	    printf("\tconn_type: %s\n", 	conn_type[sop->conn_type]);
-	    printf("\tsockio: %s\n", 		sockio[sop->sockio]);
-	    printf("\tip: %s\n", 		sop->ip != 0 ? sop->ip : NULL);
-	    printf("\tport: %d\n", 		sop->port != 0 ? sop->port : 0);
+	    log_msg("----- sock_data -----");
+	    log_msg("\tconn_type: %s", 	conn_type[sop->conn_type]);
+	    log_msg("\tsockio: %s", 		sockio[sop->sockio]);
+	    log_msg("\tip: %s", 		sop->ip != 0 ? sop->ip : NULL);
+	    log_msg("\tport: %d", 		sop->port != 0 ? sop->port : 0);
 	    if (iop->sock_data->hostname != NULL)
-		printf("\thostname: %s\n", sop->hostname);
+		log_msg("\thostname: %s", sop->hostname);
 
 	    if (sop->sockpath != NULL)
-		printf("\tsockpath: %s\n", sop->sockpath);
+		log_msg("\tsockpath: %s", sop->sockpath);
 
 	    if (sop->tls == TRUE) {
-		printf("\ttls = TRUE\n");
-		printf("\ttls_port: %s\n", sop->tls_port);
+		log_msg("\ttls = TRUE");
+		log_msg("\ttls_port: %s", sop->tls_port);
 		if (sop->cacert_path != NULL)
-		    printf("\tcacertpath: %s\n", sop->cacert_path);
+		    log_msg("\tcacertpath: %s", sop->cacert_path);
 
 		if (sop->cacert_dirpath != NULL)
-		    printf("\tcacertdir: %s\n", sop->cacert_dirpath);
+		    log_msg("\tcacertdir: %s", sop->cacert_dirpath);
 
-		printf("\tcert_vrfy: %s\n", tr_fls[sop->cert_vrfy]);
+		log_msg("\tcert_vrfy: %s", tr_fls[sop->cert_vrfy]);
 
 		if (sop->host_cert != NULL)
-		    printf("\thost_cert: %s\n", sop->host_cert);
+		    log_msg("\thost_cert: %s", sop->host_cert);
 		if (sop->host_key != NULL)
-		    printf("\thost_key: %s\n", sop->host_key);
+		    log_msg("\thost_key: %s", sop->host_key);
 	    }
 	}
 }
@@ -406,7 +407,7 @@ int validate_path(char *path)
 	struct stat     s;
 
 	if (stat(path, &s) != 0) {
-	    log_syserr("File error: %s\n", path);
+	    log_syserr("File error: %s", path);
 	    return -1;
 	} else {
 	    return 0;
@@ -462,7 +463,7 @@ T_DATA set_io_dir(char *p)
 	} else if (strncasecmp(p, "src", 3) == 0) {
 	    return SRC;
 	} else {
-	    log_die("config error: unknow directional %s\n", p);
+	    log_die("config error: unknow directional %s", p);
 	}
 }
 
@@ -481,7 +482,7 @@ int line_byte_cnt(FILE *f)
 	}
 
 	if (fseek(f, p, SEEK_SET) != 0)
-	    log_die("seek error reading config: %s\n", strerror(errno));
+	    log_die("seek error reading config: %s", strerror(errno));
 
 	return i;
 }
@@ -661,7 +662,7 @@ int validate_cfg(struct io_cfg *iocfg)
 	iop0 = LIST_FIRST(&iocfg->iop0_paths);
 
 	if (cnt_secondaries(iop0) == 0)
-	    log_die("No secondary io streams provided\n");
+	    log_die("No secondary io streams provided");
 
 	validate_iop(iop0->iop);
 
@@ -692,10 +693,10 @@ void validate_sockparams(struct io_params *iop)
 
 	if (sop->conn_type == SRVR) {
 	    if (sop->hostname != NULL)
-		log_msg("Config notice: hostnames ignored for server listening sockets\n");
+		log_msg("Config notice: hostnames ignored for server listening sockets");
 	    
 	    if (is_dst(iop) && iop->io_type == UDP_SOCK) {
-		log_die("UDP listening servers can't be destinations\n");
+		log_die("UDP listening servers can't be destinations");
 	    }
 	} else if (is_netsock(iop) && sop->conn_type == CLIENT) {
 	    if (sop->hostname == NULL && sop->ip == NULL)

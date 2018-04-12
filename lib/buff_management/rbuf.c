@@ -52,7 +52,7 @@ int rbuf_ssh_writeto(struct io_params *iop)
 
 	r = ssh_channel_request_exec(sop->ssh_chan, sop->ssh_cmd);
 	if (r != SSH_OK) {
-	    printf("ssh_channel_request_exec() not ok!\n");
+	    log_msg("ssh_channel_request_exec() not ok!\n");
             ssh_channel_close(sop->ssh_chan);
             ssh_channel_free(sop->ssh_chan);
             return -1;
@@ -207,7 +207,6 @@ int rbuf_writeto(struct io_params *iop)
 		    iop->w_ptr = w_ptr;
 		    continue;
 		} else if ((r = do_rderr(iop, w_ptr)) < 0) {
-		    log_msg("RETURNING: WROTE TOTAL OF %d BYTES TO RBUFF\n", iop->bytes);
 		    return r;
 		}
 	    }
@@ -245,7 +244,6 @@ int rbuf_readfrom(struct io_params *iop)
 		nleft = r_ptr->len;
 		while (nleft > 0) {
 		    nw = write(iop->io_fd, lptr, r_ptr->len);
-		    log_msg("Wrote %d bytes to %d\n", nw, iop->io_fd);
 		    if (nw == r_ptr->len) {
 			MTX_LOCK(&r_ptr->next->mtx_lock);
 			MTX_UNLOCK(&r_ptr->mtx_lock);
@@ -447,7 +445,7 @@ int rbuf_t3_readfrom(struct io_params *iop)
 	    nleft = r_ptr->len;
 
 	    while (nleft > 0) {
-		nw = write(*iop->iofd_p, lptr, r_ptr->len);
+		nw = write(iop->io_fd, lptr, r_ptr->len);
 		if (nw == r_ptr->len) {
 		    CNT_UPDATE(iop, nw);
 		    FDMTX_UNLOCK(iop->fdlock_p);
@@ -609,7 +607,7 @@ int io_error(struct io_params *iop, int e, int n)
 	} else if (errno == EPIPE || iop->io_type == PIPE) {
 	    return -2;
 	} else {
-	    log_ret("unknown io error %d %s", e, iop->path);
+	    log_ret("io error");
 	    return -2;
 	}
 }
@@ -629,7 +627,7 @@ int do_rderr(struct io_params *iop, struct rbuf_entry *rb)
 	n = SIGTERM_STAT;
 	MTX_UNLOCK(&sigtermstat_lock);
 	if (n) { 	/* WE'RE TERM'D */
-	    printf("WE'RE TERMED\n");
+	    log_msg("WE'RE TERMED\n");
 	    return -2;
 	}
 
@@ -728,7 +726,7 @@ int do_poll(struct io_params *iop)
 	    log_msg("revents error; bad descriptor for %s?\n", iop->path);
 	    return -1;
 	} else if (pfd[0].revents & (POLLHUP)) { /* DISCONNECTED */
-	    printf("poll() returned POLLHUP\n");
+	    log_msg("poll() returned POLLHUP\n");
 		return -1;
 	} else {
 	    return 0;
@@ -792,31 +790,30 @@ void report_close_error(struct io_params *iop)
 	    log_msg("Lost connection to unix sock %s\n", iop->path);
 	} else if (iop->io_type == PIPE) {
 	    log_msg("Process close: %s\n", iop->pipe_cmd);
-	} else {
-	    log_msg("Descriptor closed for %s\n", iop->path);
 	}
 }
 
 void close_desc(struct io_params *iop)
 {
 	struct sock_param	*sop;
-	int			d;
 	sop = iop->sock_data;
 
-	if (is_dst(iop) && *iop->cfgtype_p == TYPE_3)
-	    d = *iop->iofd_p;
-	else
-	    d = iop->io_fd;
+	/* IF d == -1 THEN DESCRIPTOR CLOSED OR NEVER OPENED
+	 * DESCRIPTOR SHOULD ONLY BE CLOSE ONCE
+	 */
 
-	if (iop->io_type != PIPE || iop->io_type != SSH) {
-	    close(d);
-	} else if (iop->io_type == SSH) {
-	    ssh_disconnect(sop->ssh_s);
-	    ssh_free(sop->ssh_s);
-	} else if (iop->io_type == PIPE) {
-	    if (kill(iop->pipe_cmd_pid, SIGTERM) != 0)
-		log_syserr("kill() failed for %s\n", iop->pipe_cmd);
-	    close(d);
+	if (iop->io_fd >= 0) {
+	    if (iop->io_type != PIPE || iop->io_type != SSH) {
+		close(iop->io_fd);
+	    } else if (iop->io_type == SSH) {
+		ssh_disconnect(sop->ssh_s);
+		ssh_free(sop->ssh_s);
+	    } else if (iop->io_type == PIPE) {
+		if (kill(iop->pipe_cmd_pid, SIGTERM) != 0)
+		    log_syserr("kill() failed for %s\n", iop->pipe_cmd);
+		close(iop->io_fd);
+	    }
+	    iop->io_fd = -1;
 	}
 }
 
@@ -848,8 +845,9 @@ void release_locks(void *arg)
 		}
 	    }
 
-	    if (pthread_mutex_unlock(&rb->mtx_lock) != 0) {
-		log_die("mutex unlock error\n");
+	    r = pthread_mutex_lock(&rb->mtx_lock);
+	    if (r == 0 || r == EDEADLK) {
+		pthread_mutex_unlock(&rb->mtx_lock);
 	    }
 	} else {
 	    if (*iop->cfgtype_p == TYPE_1) {

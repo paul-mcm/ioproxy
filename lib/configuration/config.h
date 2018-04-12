@@ -126,6 +126,7 @@ struct io_params {
 	unsigned long		bytes;
 	unsigned long		io_cnt;
         struct sock_param	*sock_data;	/* MAY BE NULL */
+	struct iop1_paths	*iop1_p;
 };
 
 struct iop0_params {
