@@ -26,6 +26,10 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
+#ifdef BSD
+#include <sys/event.h>
+#endif
+
 #include "ftypes.h"
 
 #define SA struct sockaddr
@@ -247,7 +251,9 @@ int open_file(struct io_params *iop)
 	int		fd;
 	int 		oflags;
 	int		perms;
-
+#ifdef BSD
+	struct kevent   ke[1];
+#endif
 	oflags = set_flags(iop);
 	perms =  S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH;
 
@@ -271,6 +277,13 @@ int open_file(struct io_params *iop)
 	if (lseek(fd, 0, SEEK_END) < 0)
 		log_syserr("lseek(2) failed");
 
+#ifdef BSD
+	if (is_src(iop)) {
+	    iop->kqd = kqueue();
+	    EV_SET(&ke[0], fd, EVFILT_VNODE, EV_ADD | EV_ENABLE | EV_CLEAR, NOTE_TRUNCATE, 0, NULL);
+	    kevent(iop->kqd, ke, 1, NULL, 0, NULL);
+	}
+#endif
 	return fd;
 }
 

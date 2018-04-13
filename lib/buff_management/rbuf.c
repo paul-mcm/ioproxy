@@ -14,6 +14,10 @@
  */
 
 #include "rbuf.h"
+#ifdef BSD
+#include <sys/event.h>
+#endif
+
 extern volatile sig_atomic_t SIGHUP_STAT;
 extern volatile sig_atomic_t SIGTERM_STAT;
 extern pthread_mutex_t sighupstat_lock;
@@ -614,8 +618,13 @@ int io_error(struct io_params *iop, int e, int n)
 
 int do_rderr(struct io_params *iop, struct rbuf_entry *rb)
 {
-	int	r, n;
+	int		r, n;
+	struct stat	sb;
 
+#ifdef BSD
+	struct timespec	t;
+	struct kevent	ke[1];
+#endif
 	MTX_LOCK(&sighupstat_lock);
 	n = SIGHUP_STAT;
 	MTX_UNLOCK(&sighupstat_lock);
@@ -642,8 +651,23 @@ int do_rderr(struct io_params *iop, struct rbuf_entry *rb)
 	r = io_error(iop, errno, rb->len);
 
 	if (r == 0) {
-	/* POLL WILL JUST RETURN IMMEDIATELY ON EOF */
+	    /* POLL WILL JUST RETURN IMMEDIATELY ON EOF */
 	    if (iop->io_type == REG_FILE) {
+#ifdef BSD
+		if (is_src(iop)) {
+		    t.tv_sec = 0;
+		    t.tv_nsec = 0;
+
+		    if ((r = kevent(iop->kqd, NULL, 0, ke, 1, &t)) == 1) {
+
+			if (lseek(iop->io_fd, 0, SEEK_SET) == -1) {
+			    log_syserr("lseek() error");
+			    exit(-1);
+			}
+			return 0;
+		    }
+		}
+#endif
 		sleep(3);
 		return 0;
 	    }

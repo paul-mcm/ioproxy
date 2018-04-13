@@ -127,6 +127,9 @@ struct io_params {
 	unsigned long		io_cnt;
         struct sock_param	*sock_data;	/* MAY BE NULL */
 	struct iop1_paths	*iop1_p;
+#ifdef BSD
+	int			kqd;
+#endif
 };
 
 struct iop0_params {
