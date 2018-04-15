@@ -68,3 +68,4 @@ void copy_io_params(struct io_params *, struct io_params *);
 int cancel_threads(struct iop0_params *);
 int sigrecvd(void);
 int load_command(struct all_cfg_list *, char *, char *, char *);
+void stop_io(void);

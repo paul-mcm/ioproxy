@@ -136,8 +136,11 @@ int fill(char *f, char *v, struct io_params *iop)
 	    sop->host_key = malloc(vlen + 1);
 	    strlcpy(sop->host_key, v, vlen + 1);
 	} else if (strcasecmp(f, "ssh_cmd") == 0) {
-	    sop->ssh_cmd = malloc(vlen + 1);
-	    strlcpy(sop->ssh_cmd, v, vlen + 1);
+	    sop->ssh_cmd = malloc(vlen + 3);
+	    strlcpy(sop->ssh_cmd, v, vlen + 3);
+	    sop->ssh_cmd[vlen] = '\r';
+	    sop->ssh_cmd[vlen + 1] = '\n';
+	    sop->ssh_cmd[vlen + 2 ] = '\0';
 	} else if (strcasecmp(f, "pipe_cmd") == 0) {
 	    iop->pipe_cmd = malloc(vlen + 1);
 	    strlcpy(iop->pipe_cmd, v, vlen + 1);

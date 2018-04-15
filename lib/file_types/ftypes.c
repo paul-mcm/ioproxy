@@ -198,13 +198,15 @@ int open_sshsession(struct io_params *iop)
 	if (sop->ssh_chan == NULL)
 	    return -1;
 
-	r = ssh_channel_open_session(sop->ssh_chan);
+	if ((r = ssh_channel_open_session(sop->ssh_chan)) != SSH_OK)
+	    log_die("FAILED SSH OPEN SESSION\n");
 
-        if (r != SSH_OK) {
-	    log_msg("SSH channel no SSH_OK\n");
-            ssh_channel_free(sop->ssh_chan);
-            return -1;
-        }
+	if ((r = ssh_channel_request_pty(sop->ssh_chan)) != SSH_OK)
+	    log_die("ssh_channel_request_pty() failed");
+
+	if ((r = ssh_channel_request_shell(sop->ssh_chan)) != SSH_OK)
+	    log_die("FAILED SSH SHELL REQUEST\n");
+
 	return 0;
 }
 

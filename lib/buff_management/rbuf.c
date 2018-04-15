@@ -54,13 +54,29 @@ int rbuf_ssh_writeto(struct io_params *iop)
 	    rbuf_locksync0(iop);
 	}
 
-	r = ssh_channel_request_exec(sop->ssh_chan, sop->ssh_cmd);
-	if (r != SSH_OK) {
-	    log_msg("ssh_channel_request_exec() not ok!\n");
-            ssh_channel_close(sop->ssh_chan);
-            ssh_channel_free(sop->ssh_chan);
-            return -1;
-        }
+/*
+* 	r = ssh_channel_request_exec(sop->ssh_chan, "tail -f /home/paul/specialfile");
+*	if (r == SSH_ERROR) {
+*	    log_msg("ssh_channel_request_exec() not ok!\n");
+*            ssh_channel_close(sop->ssh_chan);
+*            ssh_channel_free(sop->ssh_chan);
+*            return -2;
+*        } else if (r == SSH_AGAIN) {
+*	    log_msg("AGAIN............\n");
+*	}
+*/
+
+/*	struct ssh_buffer_struct* ssh_buffer_new(void);
+*	for (i = 0; i < strlen(sop->ssh_cmd); i++)
+*	    printf("%d\n", sop->ssh_cmd[i]);
+*
+*/
+	r = ssh_channel_write(sop->ssh_chan, sop->ssh_cmd, strlen(sop->ssh_cmd));
+	if (r == SSH_ERROR) {
+	    log_die("ssh_channel_write(): SSH_ERROR\n");
+	} else {
+	    log_msg("ssh_channel_write() wrote %d bytes\n", r);
+	}
 
 	if (*iop->cfgtype_p != TYPE_2) {
 	    for (;;) {
@@ -826,15 +842,29 @@ void close_desc(struct io_params *iop)
 	 * DESCRIPTOR SHOULD ONLY BE CLOSE ONCE
 	 */
 
+	if (iop->io_type == SSH && sop->ssh_s != NULL) {
+	    ssh_channel_send_eof(sop->ssh_chan);
+
+/*	    if (ssh_channel_request_send_signal(sop->ssh_chan, "TERM") != SSH_OK)
+ *		log_die("SSH not ok sending exit signal");
+ */
+	    ssh_channel_close(sop->ssh_chan);
+	    ssh_channel_free(sop->ssh_chan);
+	    ssh_disconnect(sop->ssh_s);
+	    ssh_free(sop->ssh_s);
+	    sop->ssh_s == NULL;
+	    return;
+	}
+
 	if (iop->io_fd >= 0) {
-	    if (iop->io_type != PIPE || iop->io_type != SSH) {
-		close(iop->io_fd);
-	    } else if (iop->io_type == SSH) {
-		ssh_disconnect(sop->ssh_s);
-		ssh_free(sop->ssh_s);
-	    } else if (iop->io_type == PIPE) {
+	    if (iop->io_type == PIPE) {
 		if (kill(iop->pipe_cmd_pid, SIGTERM) != 0)
 		    log_syserr("kill() failed for %s\n", iop->pipe_cmd);
+		close(iop->io_fd);
+	    } else if (is_netsock(iop) && use_tls(iop)) {
+		tls_close(sop->tls_ctx);
+		close(iop->io_fd);
+	    } else {
 		close(iop->io_fd);
 	    }
 	    iop->io_fd = -1;
@@ -868,7 +898,6 @@ void release_locks(void *arg)
 		    pthread_cond_signal(&iop->readable);
 		}
 	    }
-
 	    r = pthread_mutex_lock(&rb->mtx_lock);
 	    if (r == 0 || r == EDEADLK) {
 		pthread_mutex_unlock(&rb->mtx_lock);
@@ -884,7 +913,6 @@ void release_locks(void *arg)
 		if (r == 0 || r == EDEADLK) {
 		    pthread_mutex_unlock(iop->fdlock_p);
 		}
-
 		r = pthread_mutex_lock(&rb->mtx_lock);
 		if (r == 0 || r == EDEADLK) {
 		    pthread_mutex_unlock(&rb->mtx_lock);

@@ -96,6 +96,7 @@ int main(int argc, char *argv[])
 	sigemptyset(&sig_set);
         sigaddset(&sig_set, SIGTERM);
         sigaddset(&sig_set, SIGHUP);
+        sigaddset(&sig_set, SIGINT);
 	if (pthread_sigmask(SIG_BLOCK, &sig_set, NULL) != 0)
 	    log_die("pthread_sigmask() error\n");
 
@@ -153,6 +154,8 @@ int main(int argc, char *argv[])
 	/* BLOCK */
 	pthread_join(sigterm_tid, NULL);
 	log_msg("RECV'D SIGTERM. EXITING...");
+	stop_io();
+	sleep(4);
 	exit(0);
 }
 
@@ -353,7 +356,10 @@ void *iop0_thrd(void *arg)
 	}
 
 	r = pthread_join(iop->tid, NULL);
+
+	log_msg("IOP0 THREAD RETURNED\n");
 	r = cancel_threads(iop0);
+	log_msg("THREADS CANCELLED\n");
 
 	/* ALL I/O THREADS SHOULD BE GONE BY THIS POINT */
 	if (SIGHUP_STAT == TRUE) {
@@ -363,6 +369,7 @@ void *iop0_thrd(void *arg)
 		pthread_mutex_unlock(&sighupstat_lock);
 		if (pthread_cond_signal(&thrd_stat) != 0)
 		    log_syserr("ERROR sending SIGHUP thread signal\n");
+		pthread_exit((void *)0);
 	    }
 	}
 
@@ -573,6 +580,7 @@ void * sigterm_thrd(void *arg)
 
         sigemptyset(&sig_set);
         sigaddset(&sig_set, SIGTERM);
+        sigaddset(&sig_set, SIGINT);
         pthread_sigmask(SIG_BLOCK, &sig_set, NULL);
 
 	/* BLOCK */
@@ -728,25 +736,31 @@ void * sighup_thrd(void *a)
 	SIGHUP_STAT = TRUE;
 	pthread_mutex_unlock(&sighupstat_lock);
 
-	LIST_FOREACH(iocfg, &all_cfg, io_cfgs) {
-	    LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths) {
-		LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
-		    close_desc(iop1->iop);
-		}
-		close_desc(iop0->iop);
+	log_msg("SIGHUP HAPPENED\n");
 
-		/* NEED TO FIGURE OUT WHAT *NEEDS* CANCELLING AND WHAT DOESN'T 
-		* E.G., FIFOS RETURN AFTER DESCRIPTOR CLOSE
-		*/
-		pthread_cancel(iop0->iop->tid);
-	    }
-	}
+/*
+*	LIST_FOREACH(iocfg, &all_cfg, io_cfgs) {
+*	    LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths) {
+*		LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
+*		    log_msg("CLOSING %d\n", iop1->iop->io_fd);
+*		    close_desc(iop1->iop);
+*		}
+*		close_desc(iop0->iop);
+*
+*		pthread_cancel(iop0->iop->tid);
+*	    }
+*	}
+*/
+	stop_io();
+	log_msg("ALL CLOSED\n");
 
 	MTX_LOCK(&sighupstat_lock);
 	while (thread_cnt == 1) {
 	    pthread_cond_wait(&thrd_stat, &sighupstat_lock);
 	}
 	MTX_UNLOCK(&sighupstat_lock);
+
+	log_msg("CONDITION TRUE\n");
 
 	/* EMPTY CFG LIST HERE */
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
@@ -791,11 +805,37 @@ int cancel_threads(struct iop0_params *iop0)
 	LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
 	    if (pthread_join(iop1->iop->tid, NULL) != 0) {
 		log_msg("pthread_join() returned badly!\n");
+	    } else {
+	 	log_msg("pthread_join() returned\n");
 	    }
 	    n++;
 	}
 	return n;
 }
+
+
+void stop_io(void)
+{
+	struct io_cfg		*iocfg;
+	struct iop1_params	*iop1;
+	struct iop0_params	*iop0;
+	struct io_params	*iop;
+
+
+	LIST_FOREACH(iocfg, &all_cfg, io_cfgs) {
+	    LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths) {
+		LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
+		    log_msg("CLOSING %d\n", iop1->iop->io_fd);
+		    close_desc(iop1->iop);
+		}
+		close_desc(iop0->iop);
+		pthread_cancel(iop0->iop->tid);
+	    }
+	}
+}
+
+
+
 
 int sigrecvd(void)
 {
