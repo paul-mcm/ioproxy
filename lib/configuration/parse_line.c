@@ -95,10 +95,10 @@ int fill(char *f, char *v, struct io_params *iop)
 		log_die("Invalid config directive: %s: %s;\n", f, v);
 	} else if (strcasecmp(f, "path") == 0 ) {
 	    iop->path = malloc(vlen + 1);
-	    strncpy(iop->path, v, vlen + 1);
+	    strlcpy(iop->path, v, vlen + 1);
 	} else if (strcasecmp(f, "sockpath") == 0 ) {
 	    iop->path = malloc(vlen + 1);
-	    strncpy(iop->path, v, 256);
+	    strlcpy(iop->path, v, vlen + 1);
 	    sop->sockpath = iop->path;
 	} else if (strcasecmp(f, "host") == 0) {
 	    if ((sop->hostname = malloc(vlen + 1)) == NULL)
@@ -108,7 +108,7 @@ int fill(char *f, char *v, struct io_params *iop)
 		/* XXX MUST FIX */
 	} else if (strcasecmp(f, "ip") == 0) {
 	    sop->ip = malloc(vlen + 1);
-	    strncpy(sop->ip, v, vlen + 1);
+	    strlcpy(sop->ip, v, vlen + 1);
 	} else if (strcasecmp(f, "conn") == 0)
 	    err = set_conn(v, iop);
 	else if (strcasecmp(f, "sockproto") == 0)
@@ -117,7 +117,7 @@ int fill(char *f, char *v, struct io_params *iop)
 	    err = set_nonblock(v, iop);
 	else if (strcasecmp(f, "port") == 0) {
 	    sop->tls_port = malloc(vlen + 1);
-	    strncpy(sop->tls_port, v, vlen + 1);
+	    strlcpy(sop->tls_port, v, vlen + 1);
 	    sop->port = strtonum(v, 1, 65535, &s);
 	    if (s != NULL)
 		log_syserr("strtonum() error: %s\n", s);
@@ -125,10 +125,10 @@ int fill(char *f, char *v, struct io_params *iop)
 	    sop->tls = TRUE;
 	else if (strcasecmp(f, "cacert") == 0) {
 	    sop->cacert_path = malloc(vlen + 1);
-	    strncpy(sop->cacert_path, v, vlen + 1);
+	    strlcpy(sop->cacert_path, v, vlen + 1);
 	} else if (strcasecmp(f, "cacertdir") == 0) {
 	    sop->cacert_dirpath = malloc(vlen + 1);
-	    strncpy(sop->cacert_dirpath, v, vlen);
+	    strlcpy(sop->cacert_dirpath, v, vlen + 1);
 	} else if (strcasecmp(f, "host_cert") == 0) {
 	    sop->host_cert = malloc(vlen + 1);
 	    strlcpy(sop->host_cert, v, vlen + 1);
