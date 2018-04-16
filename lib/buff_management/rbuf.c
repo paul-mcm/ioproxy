@@ -39,6 +39,10 @@ b -= a;						\
 c += a;						\
 d += a;
 
+#define NXT_BUF(a, p)				\
+a = a->next;					\
+p = a;
+
 int rbuf_ssh_writeto(struct io_params *iop)
 {
 	struct sock_param	*sop;
@@ -84,7 +88,7 @@ int rbuf_ssh_writeto(struct io_params *iop)
 		    MTX_LOCK(&w_ptr->next->mtx_lock);
 		    MTX_UNLOCK(&w_ptr->mtx_lock);
 		    CNT_UPDATE(iop, w_ptr->len);
-		    w_ptr = w_ptr->next;
+		    NXT_BUF(w_ptr, iop->w_ptr);
 		    continue;
 		} else {
 		    sleep(2);
@@ -97,7 +101,7 @@ int rbuf_ssh_writeto(struct io_params *iop)
 		    WR_LOCK(&w_ptr->next->rw_lock);
 		    RW_UNLOCK(&w_ptr->rw_lock);
 		    CNT_UPDATE(iop, w_ptr->len);
-		    w_ptr = w_ptr->next;
+		    NXT_BUF(w_ptr, iop->w_ptr);
 		    continue;
 		} else {
 		    return 0;
@@ -127,7 +131,7 @@ int rbuf_tls_writeto(struct io_params *iop)
 		    MTX_LOCK(&w_ptr->next->mtx_lock);
 		    MTX_UNLOCK(&w_ptr->mtx_lock);
 		    CNT_UPDATE(iop, w_ptr->len);
-		    w_ptr = w_ptr->next;
+		    NXT_BUF(w_ptr, iop->w_ptr);
 		    continue;
 		} else if ((r = do_rderr(iop, w_ptr)) < 0) {
 		    return r;
@@ -139,7 +143,7 @@ int rbuf_tls_writeto(struct io_params *iop)
 		    WR_LOCK(&w_ptr->next->rw_lock);
 		    RW_UNLOCK(&w_ptr->rw_lock);
 		    CNT_UPDATE(iop, w_ptr->len);
-		    w_ptr = w_ptr->next;
+		    NXT_BUF(w_ptr, iop->w_ptr);
 		    continue;
 		} else if ((r = do_rderr(iop, w_ptr)) < 0) {
 		    return r;
@@ -169,7 +173,7 @@ int rbuf_tls_readfrom(struct io_params *iop)
 			MTX_LOCK(&r_ptr->next->mtx_lock);
 			MTX_UNLOCK(&r_ptr->mtx_lock);
 			CNT_UPDATE(iop, nw);
-			r_ptr = r_ptr->next;
+			NXT_BUF(r_ptr, iop->r_ptr);
 			nleft -= nw;
 			break;
 		    } else if (nw < r_ptr->len && nw > 0) {
@@ -190,8 +194,8 @@ int rbuf_tls_readfrom(struct io_params *iop)
 			RD_LOCK(&r_ptr->next->rw_lock);
 			RW_UNLOCK(&r_ptr->rw_lock);
 			CNT_UPDATE(iop, nw);
+			NXT_BUF(r_ptr, iop->r_ptr);
 			nleft -= nw;
-			r_ptr = r_ptr->next;
 			break;
 		    } else if (nw < r_ptr->len && nw > 0) {
 			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
@@ -223,8 +227,7 @@ int rbuf_writeto(struct io_params *iop)
 		    MTX_LOCK(&w_ptr->next->mtx_lock);
 		    MTX_UNLOCK(&w_ptr->mtx_lock);
 		    CNT_UPDATE(iop, w_ptr->len);
-		    w_ptr = w_ptr->next;
-		    iop->w_ptr = w_ptr;
+		    NXT_BUF(w_ptr, iop->w_ptr);
 		    continue;
 		} else if ((r = do_rderr(iop, w_ptr)) < 0) {
 		    return r;
@@ -236,6 +239,7 @@ int rbuf_writeto(struct io_params *iop)
 		    WR_LOCK(&w_ptr->next->rw_lock);
 		    RW_UNLOCK(&w_ptr->rw_lock);
 		    CNT_UPDATE(iop, w_ptr->len);
+		    NXT_BUF(w_ptr, iop->w_ptr);
 		    w_ptr = w_ptr->next;
 		    iop->w_ptr = w_ptr;
 		    continue;
@@ -268,9 +272,8 @@ int rbuf_readfrom(struct io_params *iop)
 			MTX_LOCK(&r_ptr->next->mtx_lock);
 			MTX_UNLOCK(&r_ptr->mtx_lock);
 			CNT_UPDATE(iop, nw);
+			NXT_BUF(r_ptr, iop->r_ptr);
 			nleft -= nw;
-			r_ptr = r_ptr->next;
-			iop->r_ptr = iop->r_ptr;
 		    } else if (nw < r_ptr->len && nw > 0) {
 			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
 			continue;
@@ -289,9 +292,8 @@ int rbuf_readfrom(struct io_params *iop)
 			RD_LOCK(&r_ptr->next->rw_lock);
 			RW_UNLOCK(&r_ptr->rw_lock);
 			CNT_UPDATE(iop, nw);
+			NXT_BUF(r_ptr, iop->r_ptr);
 			nleft -= nw;
-			r_ptr = r_ptr->next;
-			iop->r_ptr = r_ptr;
 			break;
 		    } else if (nw < r_ptr->len && nw > 0) {
 			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
@@ -328,7 +330,7 @@ int rbuf_dgram_writeto(struct io_params *iop)
 		    MTX_LOCK(&w_ptr->next->mtx_lock);
 		    MTX_UNLOCK(&w_ptr->mtx_lock);
 		    CNT_UPDATE(iop, w_ptr->len);
-		    w_ptr = w_ptr->next;
+		    NXT_BUF(w_ptr, iop->w_ptr);
 		    continue;
 		} else if ((r = do_rderr(iop, w_ptr)) < 0) {
 			return r;
@@ -340,7 +342,7 @@ int rbuf_dgram_writeto(struct io_params *iop)
 		    WR_LOCK(&w_ptr->next->rw_lock);
 		    RW_UNLOCK(&w_ptr->rw_lock);
 		    CNT_UPDATE(iop, w_ptr->len);
-		    w_ptr = w_ptr->next;
+		    NXT_BUF(w_ptr, iop->w_ptr);
 		    continue;
 		} else if ((r = do_rderr(iop, w_ptr)) < 0) {
 			return r;
@@ -372,8 +374,8 @@ int rbuf_dgram_readfrom(struct io_params *iop)
 			MTX_LOCK(&r_ptr->next->mtx_lock);
 			MTX_UNLOCK(&r_ptr->mtx_lock);
 			CNT_UPDATE(iop, nw);
+			NXT_BUF(r_ptr, iop->r_ptr);
 			nleft -= nw;
-			r_ptr = r_ptr->next;
 			break;
 		    } else if (nw < r_ptr->len && nw > 0) {
 			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
@@ -393,8 +395,8 @@ int rbuf_dgram_readfrom(struct io_params *iop)
 			RD_LOCK(&r_ptr->next->rw_lock);
 			RW_UNLOCK(&r_ptr->rw_lock);
 			CNT_UPDATE(iop, nw);
+			NXT_BUF(r_ptr, iop->r_ptr);
 			nleft -= nw;
-			r_ptr = r_ptr->next;
 			break;
 		    } else if (nw < r_ptr->len && nw > 0) {
 			SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
@@ -431,8 +433,8 @@ int rbuf_t3_tlsreadfrom(struct io_params *iop)
 		    MTX_UNLOCK(&r_ptr->mtx_lock);
 		    FDMTX_LOCK(iop->fdlock_p);
 		    CNT_UPDATE(iop, nw);
+		    NXT_BUF(r_ptr, iop->r_ptr);
 		    nleft -= nw;
-		    r_ptr = r_ptr->next;
 		    break;
 		} else if (nw < r_ptr->len && nw > 0) {
 		    SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
@@ -472,8 +474,8 @@ int rbuf_t3_readfrom(struct io_params *iop)
 		    MTX_LOCK(&r_ptr->next->mtx_lock);
 		    MTX_UNLOCK(&r_ptr->mtx_lock);
 		    FDMTX_LOCK(iop->fdlock_p);
+		    NXT_BUF(r_ptr, iop->r_ptr);
 		    nleft -= nw;
-		    r_ptr = r_ptr->next;
 		    break;
 		} else if (nw < r_ptr->len && nw > 0) {
 		    SHORT_WRTCNT(nw, nleft, lptr, iop->bytes);
@@ -843,16 +845,15 @@ void close_desc(struct io_params *iop)
 	 */
 
 	if (iop->io_type == SSH && sop->ssh_s != NULL) {
-	    ssh_channel_send_eof(sop->ssh_chan);
-
 /*	    if (ssh_channel_request_send_signal(sop->ssh_chan, "TERM") != SSH_OK)
  *		log_die("SSH not ok sending exit signal");
  */
 	    ssh_channel_close(sop->ssh_chan);
+	    ssh_channel_send_eof(sop->ssh_chan);
 	    ssh_channel_free(sop->ssh_chan);
 	    ssh_disconnect(sop->ssh_s);
-	    ssh_free(sop->ssh_s);
-	    sop->ssh_s == NULL;
+/*	    ssh_free(sop->ssh_s); */
+/*	    sop->ssh_s == NULL; */
 	    return;
 	}
 
@@ -888,6 +889,7 @@ void release_locks(void *arg)
 	if (is_src(iop)) {
 	    if (rb->len <= 0)
 		rb->len = 1;
+
 	    if (*iop->listready == 0) {
 		MTX_LOCK(&iop->listlock);
 		if (*iop->listready == 0) {

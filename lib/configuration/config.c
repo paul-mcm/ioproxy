@@ -559,6 +559,7 @@ struct sock_param *sock_param_alloc()
 	sop->host_cert		= NULL;
 	sop->host_key		= NULL;
 	sop->ssh_cmd		= NULL;
+	sop->ssh_s		= NULL;
 	sop->cert_vrfy		= TRUE;
 	sop->listenfd		= -1;
 
@@ -620,6 +621,9 @@ void free_sock_param(struct sock_param *sop)
 
 	if (sop->ssh_cmd != NULL)
 	    free(sop->ssh_cmd);
+
+	if (sop->ssh_s != NULL)
+	    ssh_free(sop->ssh_s);
 
 	free(sop);
 }

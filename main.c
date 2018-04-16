@@ -154,8 +154,7 @@ int main(int argc, char *argv[])
 	/* BLOCK */
 	pthread_join(sigterm_tid, NULL);
 	log_msg("RECV'D SIGTERM. EXITING...");
-	stop_io();
-	sleep(4);
+	init_io_shutdown();
 	exit(0);
 }
 
@@ -373,7 +372,9 @@ void *iop0_thrd(void *arg)
 	    }
 	}
 
-	/* IF WE'RE THE LAST THREAD, CALL EXIT */
+	/* IF HERE, ASSUME SHUTTING DOWN .
+	 * IF WE'RE THE LAST THREAD, CALL EXIT
+	 */
 	MTX_LOCK(&iocfg_lock);
 	iop->tid = NULL;
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs) {
@@ -751,16 +752,13 @@ void * sighup_thrd(void *a)
 *	    }
 *	}
 */
-	stop_io();
-	log_msg("ALL CLOSED\n");
+	init_io_shutdown();
 
 	MTX_LOCK(&sighupstat_lock);
 	while (thread_cnt == 1) {
 	    pthread_cond_wait(&thrd_stat, &sighupstat_lock);
 	}
 	MTX_UNLOCK(&sighupstat_lock);
-
-	log_msg("CONDITION TRUE\n");
 
 	/* EMPTY CFG LIST HERE */
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs)
@@ -801,7 +799,9 @@ int cancel_threads(struct iop0_params *iop0)
 		log_msg("pthread_cancel() failed: %d\n", r);
 		continue;
 	    }
+	    close_desc(iop1->iop);
 	}
+
 	LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
 	    if (pthread_join(iop1->iop->tid, NULL) != 0) {
 		log_msg("pthread_join() returned badly!\n");
@@ -813,19 +813,19 @@ int cancel_threads(struct iop0_params *iop0)
 	return n;
 }
 
-
-void stop_io(void)
+void init_io_shutdown(void)
 {
 	struct io_cfg		*iocfg;
 	struct iop1_params	*iop1;
 	struct iop0_params	*iop0;
 	struct io_params	*iop;
 
-
 	LIST_FOREACH(iocfg, &all_cfg, io_cfgs) {
 	    LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths) {
 		LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
-		    log_msg("CLOSING %d\n", iop1->iop->io_fd);
+		    if (iop1->iop->io_type == REG_FILE)
+			    log_msg("CLOSING %d", iop1->iop->io_fd);
+
 		    close_desc(iop1->iop);
 		}
 		close_desc(iop0->iop);
@@ -833,9 +833,6 @@ void stop_io(void)
 	    }
 	}
 }
-
-
-
 
 int sigrecvd(void)
 {
