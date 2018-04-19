@@ -622,6 +622,7 @@ void free_sock_param(struct sock_param *sop)
 	if (sop->ssh_cmd != NULL)
 	    free(sop->ssh_cmd);
 
+/* 	XXX CAUSES RANDOM(?) BUS ERROR; SYNC ISSUE? */
 	if (sop->ssh_s != NULL)
 	    ssh_free(sop->ssh_s);
 

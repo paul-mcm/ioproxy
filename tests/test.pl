@@ -4,6 +4,7 @@ use FIFOTEST;
 use FILETEST;
 use SSHTEST;
 use SOCKETTEST;
+use PRIVATE;
 
 $SIG{CHLD} = 'IGNORE';
 $SIG{TERM} = \&cleanup;
@@ -15,8 +16,8 @@ $SIG{QUIT} = \&cleanup;
 #	'fife_in'	=>	\&fifo_in,
 #	'fifo_out'	=>	\&fifo_out,
 #	'tls_cli'	=>	\&tls_cli,
-	'tls_serv'	=>	\&tls_cli,
-#	'ssh_in'	=>	\&ssh_in,
+#	'tls_serv'	=>	\&tls_cli,
+#	'ssh_in'	=>	\&ssh_in_test,
 );
 
 #######################################
@@ -32,8 +33,7 @@ foreach $k (keys %TESTS) {
 	print "======================================\n\n";
 }
 
-
-cleanup;
+cleanup();
 
 sub cleanup()
 {
