@@ -793,11 +793,6 @@ void do_close(struct io_params *iop, struct rbuf_entry *rb)
 	if (is_sock(iop))
 	    sop = iop->sock_data;
 
-	if (use_tls(iop)) {
-	    tls_close(sop->tls_ctx);
-	    tls_free(sop->tls_ctx);
-	}
-
 	if (is_dst(iop) || (is_src(iop) && iop->io_type == PIPE))
 	    UNLOCK(iop, rb);
 
