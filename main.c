@@ -739,19 +739,6 @@ void * sighup_thrd(void *a)
 
 	log_msg("SIGHUP HAPPENED\n");
 
-/*
-*	LIST_FOREACH(iocfg, &all_cfg, io_cfgs) {
-*	    LIST_FOREACH(iop0, &iocfg->iop0_paths, iop0_paths) {
-*		LIST_FOREACH(iop1, &iop0->io_paths, io_paths) {
-*		    log_msg("CLOSING %d\n", iop1->iop->io_fd);
-*		    close_desc(iop1->iop);
-*		}
-*		close_desc(iop0->iop);
-*
-*		pthread_cancel(iop0->iop->tid);
-*	    }
-*	}
-*/
 	init_io_shutdown();
 
 	MTX_LOCK(&sighupstat_lock);
@@ -883,7 +870,6 @@ int load_cmd(struct all_cfg_list *cfg, char *c, char *list, char *file)
 	    iop1->iop->sock_data = sock_param_alloc();
 	    iop = iop1->iop;
 	    sop = iop->sock_data;
-
 	    iop->io_type = SSH;
 
 	    if ((sop->hostname = malloc(strlen(h) + 1)) == NULL)
@@ -895,13 +881,10 @@ int load_cmd(struct all_cfg_list *cfg, char *c, char *list, char *file)
 		log_syserr("malloc() error");
 
 	    strlcpy(sop->ssh_cmd, c, strlen(c) + 1);
-
 	    LIST_INSERT_HEAD(&iop0->io_paths, iop1, io_paths);
 	}
 
 	LIST_INSERT_HEAD(&iocfg->iop0_paths, iop0, iop0_paths);
-
 	set_cfg_type(iocfg);
-
 	LIST_INSERT_HEAD(cfg, iocfg, io_cfgs);
 }
