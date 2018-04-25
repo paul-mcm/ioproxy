@@ -4,6 +4,7 @@ use FIFOTEST;
 use FILETEST;
 use SSHTEST;
 use SOCKETTEST;
+use USOCKTEST;
 use PRIVATE;
 
 $SIG{CHLD} = 'IGNORE';
@@ -15,13 +16,16 @@ $SIG{QUIT} = \&cleanup;
 #	'file_test'	=>	\&file_test,
 #	'fife_in'	=>	\&fifo_in,
 #	'fifo_out'	=>	\&fifo_out,
-#	'tls_cli'	=>	\&tls_cli,
-#	'tls_serv'	=>	\&tls_cli,
+#	'tls_src_cli'	=>	\&tls_src_cli,
+#	'tls_dst_cli'	=>	\&tls_dst_cli,
+#	'tls_src_serv'	=>	\&tls_src_serv,
+#	'tls_dst_serv'	=>	\&tls_dst_serv,
 #	'ssh_in'	=>	\&ssh_in_test,
+#	'usock_src_srv'	=>	\&usock_src_serv,
 );
 
 #######################################
-## FIFOs
+## TESTS
 #######################################
 
 foreach $k (keys %TESTS) {
