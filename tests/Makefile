@@ -34,6 +34,7 @@ all:
 	@$(CC) $(CCFLAGS) -g -I${INCLUDES} -o fifo_io fifo_io.c
 	@$(CC) $(CCFLAGS) -g -I${INCLUDES} -ltls -o tls_cli tls_cli.c
 #	@$(CC) $(CCFLAGS) -g -I${INCLUDES} -ltls -o tls_serv tls_serv.c
+	@$(CC) $(CCFLAGS) -g -I${INCLUDES} -ltls -o usock_write usock_write.c
 
 clean: 
-	@rm -f fifo_io tls_cli tls_serv
+	@rm -f fifo_io tls_cli tls_serv usock_write
