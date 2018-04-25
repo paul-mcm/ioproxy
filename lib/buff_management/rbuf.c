@@ -326,7 +326,7 @@ int rbuf_dgram_writeto(struct io_params *iop)
 
 	if (*iop->cfgtype_p != TYPE_2) {
 	    for (;;) {
-		if ((w_ptr->len = recvfrom(sop->listenfd, w_ptr->line, iop->buf_sz, 0, sop->host_addr, &len)) > 0) {
+		if ((w_ptr->len = recvfrom(iop->io_fd, w_ptr->line, iop->buf_sz, 0, sop->host_addr, &len)) > 0) {
 		    MTX_LOCK(&w_ptr->next->mtx_lock);
 		    MTX_UNLOCK(&w_ptr->mtx_lock);
 		    CNT_UPDATE(iop, w_ptr->len);
@@ -338,7 +338,7 @@ int rbuf_dgram_writeto(struct io_params *iop)
 	    }
 	} else {
 	    for (;;) {
-		if ((w_ptr->len = recvfrom(sop->listenfd, w_ptr->line, iop->buf_sz, 0, sop->host_addr, &len)) > 0) {
+		if ((w_ptr->len = recvfrom(iop->io_fd, w_ptr->line, iop->buf_sz, 0, sop->host_addr, &len)) > 0) {
 		    WR_LOCK(&w_ptr->next->rw_lock);
 		    RW_UNLOCK(&w_ptr->rw_lock);
 		    CNT_UPDATE(iop, w_ptr->len);

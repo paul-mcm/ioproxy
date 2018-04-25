@@ -305,9 +305,9 @@ int open_sock(struct io_params *iop)
 		    log_msg("error binding socket");
 		    return -1;
 	    }
-
+	    /* DGRAM SOCKS DON'T CALL accept(2) */
 	    if (iop->io_type == UDP_SOCK || sop->sockio == DGRAM)
-		return 0;
+		return sop->listenfd;
 
 	    if ((r = do_accept(iop)) < 0)
 		return r;
@@ -334,6 +334,8 @@ int do_bind(struct io_params *iop)
 	mode_t                  old_umask;
 	socklen_t		len;
 
+	sop = iop->sock_data;
+
 	if (iop->io_type == UNIX_SOCK) {
 	    memset(&u_saddr, 0, sizeof(struct sockaddr_un));
 	    u_saddr.sun_family = AF_LOCAL;
@@ -345,11 +347,12 @@ int do_bind(struct io_params *iop)
 	    len = offsetof(struct sockaddr_un, sun_path) + strlen(iop->path);
 
 	    if (sop->sockio == DGRAM) {
-		if ((lfd = socket(AF_LOCAL, SOCK_DGRAM, 0)) < 0)
+		if ((lfd = socket(AF_LOCAL, SOCK_DGRAM, 0)) < 0) {
 		    log_syserr("Failed to create listening socket:", errno);
+		}
 	    } else {
 		if ((lfd = socket(AF_LOCAL, SOCK_STREAM, 0)) < 0)
-		     log_syserr("Failed to create listening socket:", errno);
+		     log_syserr("Failed to create listening socket");
 
 		if ((r = connect(lfd, (SA *)&u_saddr, sizeof(u_saddr))) == 0) {
 		    log_die("Error: listing socket already listening");
