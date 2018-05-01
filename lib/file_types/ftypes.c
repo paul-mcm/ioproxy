@@ -461,7 +461,6 @@ int do_accept(struct io_params *iop)
 		return -1;
 	    } else {
 		log_syserr("fatal accept() error: %s", strerror(errno));
-		return -1;
 	    }
 	}
 	return sd;
