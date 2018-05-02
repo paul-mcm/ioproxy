@@ -482,7 +482,7 @@ int do_localconnect(struct io_params *iop)
 	struct sockaddr_un	uaddr;
 	int			len, fd;
 
-	fd = socket(AF_UNIX, SOCK_STREAM, 0);
+	fd = socket(AF_UNIX, SOCK_DGRAM, 0);
 	bzero(&uaddr, sizeof(uaddr));
 	uaddr.sun_family = AF_UNIX;
 	strlcpy(uaddr.sun_path, iop->path, sizeof(uaddr.sun_path));
@@ -496,11 +496,10 @@ int do_localconnect(struct io_params *iop)
 		    sleep(2);
 		    continue;
 		} else {
-		   log_syserr("connect error: %s", errno);
+		   log_syserr("connect error");
 		}
 	    } else {
 		return fd;
-		break;
 	    }
 	}
 }
