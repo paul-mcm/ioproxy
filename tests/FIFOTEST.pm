@@ -6,9 +6,10 @@ use Exporter;
 use File::Temp qw(tempfile);
 use POSIX qw(mkfifo);
 use IO::Poll qw(POLLRDNORM POLLWRNORM POLLIN POLLHUP);
+use FORK;
 
 our @ISA	= qw(Exporter);
-our @EXPORT 	= qw(fifo_in_test fifo_out_test);
+our @EXPORT 	= qw(fifo_in fifo_out);
 
 my $INPUT	= "a long string of text that has no meaning\n";
 my $IOPROXY	= '../ioproxyd';
@@ -26,9 +27,9 @@ my $ofh;
 my $pid;
 my $len;
 my $i;
-my @args;
+my @forkargs;
 
-sub fifo_in_test
+sub fifo_in
 {	
 	my @fstats;
 
@@ -45,14 +46,10 @@ sub fifo_in_test
 	close $cfg_fh;
 	close $out_fh;
 
-	$pid = fork;
-	if ($pid == 0) {
-	    close $cfg_fh;
-	    close $out_fh;
-	    push @args, $cfg_file;
-	    exec($IOPROXY, "-f", @args) || die "exec failed: $!\n";
-	    exit(0);
- 	}
+	push @forkargs, $IOPROXY;
+	push @forkargs, "-f";
+	push @forkargs, $cfg_file;
+	fork_exec(\@forkargs) || print "Error exec'ing ioproxyd";
 
 	sleep(5);
 
@@ -92,7 +89,7 @@ sub fifo_in_test
 	}
 }
 
-sub fifo_out_test
+sub fifo_out
 {	
 	my $line;
 
@@ -108,13 +105,10 @@ sub fifo_out_test
 
 	close $cfg_fh;
 
-	$pid = fork;
-	if ($pid == 0) {
-	    close $in_fh;
-	    push @args, $cfg_file;
-	    exec($IOPROXY, "-f", @args) || die "exec failed: $!\n";
-	    exit(0);
-	}
+	push @forkargs, $IOPROXY;
+	push @forkargs, "-f";
+	push @forkargs, $cfg_file;
+	fork_exec(\@forkargs) || print "Error exec'ing ioproxyd";
 
 	sleep(5);
 	$ofh = select($in_fh);

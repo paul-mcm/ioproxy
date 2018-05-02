@@ -4,6 +4,7 @@ use warnings;
 use Exporter;
 
 use File::Temp qw(tempfile);
+use FORK;
 
 our @ISA        = qw(Exporter);
 our @EXPORT     = qw(file_test);
@@ -24,7 +25,7 @@ my $pid;
 my $ret;
 my $i;
 my $len;
-my @args;
+my @forkargs;
 my @fstats;
 
 sub file_test
@@ -41,20 +42,15 @@ sub file_test
 	$| = 1;
 	select($ofh);
 
-	push @args, $cfg_file;
-
 	print $cfg_fh "{\niotype: FILE; dir: src; path: $tmp_infile;\n", 
 	"(iotype: FILE; path: $tmp_outfile;)\n}";
 
 	close $cfg_fh;
 
-	$pid = fork;
-	if ($pid == 0) {
-	    close $in_fh;
-	    close $out_fh;
-	    exec($IOPROXY, "-f", @args) || die "exec failed: $!\n";
-	    exit(0);
-	}
+	push @forkargs, $IOPROXY;
+        push @forkargs, "-f";
+        push @forkargs, $cfg_file;
+	fork_exec(\@forkargs) || print "Error exec'ing ioproxyd";
 
 	sleep(3);
 	if (do_io()) {

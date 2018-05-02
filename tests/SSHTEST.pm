@@ -14,16 +14,16 @@ my $TEMPLATE    = 'ioproxyd.XXXX';
 
 my $out_fh;
 my $tmp_outfile;
+my @forkargs;
 
 sub ssh_in_test
 {	
 	my $cfg_fh;
 	my $cfg_file;
 	my $ofh;
-	my $pid;
 	my @args;
 	my $ret		 = 1;
-	$pid		 = -1;
+	my $pid		 = -1;
 	my $testfile_len = 1983;
 
 	($cfg_fh, $cfg_file) = tempfile($TEMPLATE, UNLINK => 1, TMPDIR => 1);
@@ -36,6 +36,12 @@ sub ssh_in_test
 	    "(iotype: FILE; path: $tmp_outfile;)\n}";
 
 	close $cfg_fh;
+	
+	push @forkargs, $IOPROXY;
+	push @forkargs, "-f";
+	push @forkargs, $cfg_file;
+	fork_exec(\@forkargs) || print "Error exec'ing ioproxyd";
+
 	$pid = fork;
 	if ($pid == 0) {
 	    close $out_fh;
