@@ -694,7 +694,7 @@ void validate_sockparams(struct io_params *iop)
 	else if (iop->io_type == UDP_SOCK)
 	    sop->sockio == DGRAM;
 	else if (iop->io_type == UNIX_SOCK)
-	    sop->sockio == STREAM;
+	    sop->sockio == DGRAM;
 
 	if (sop->conn_type == SRVR) {
 	    if (sop->hostname != NULL)
@@ -702,6 +702,9 @@ void validate_sockparams(struct io_params *iop)
 	    
 	    if (is_dst(iop) && iop->io_type == UDP_SOCK) {
 		log_die("UDP listening servers can't be destinations");
+	    }
+	    if (is_dst(iop) && iop->io_type == UNIX_SOCK && sop->sockio == DGRAM) {
+		log_die("DGRAM Unix sockets can't be destination servers");
 	    }
 	} else if (is_netsock(iop) && sop->conn_type == CLIENT) {
 	    if (sop->hostname == NULL && sop->ip == NULL)
