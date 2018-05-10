@@ -6,7 +6,7 @@ use Exporter;
 use File::Temp qw(tempfile);
 use POSIX qw(mkfifo);
 use IO::Poll qw(POLLRDNORM POLLWRNORM POLLIN POLLHUP);
-use FORK;
+use Fork;
 
 our @ISA	= qw(Exporter);
 our @EXPORT 	= qw(fifo_in fifo_out);
@@ -49,7 +49,7 @@ sub fifo_in
 	push @forkargs, $IOPROXY;
 	push @forkargs, "-f";
 	push @forkargs, $cfg_file;
-	fork_exec(\@forkargs) || print "Error exec'ing ioproxyd";
+	fork_exec(\@forkargs) || die "Error exec'ing ioproxyd";
 
 	sleep(5);
 
@@ -108,7 +108,7 @@ sub fifo_out
 	push @forkargs, $IOPROXY;
 	push @forkargs, "-f";
 	push @forkargs, $cfg_file;
-	fork_exec(\@forkargs) || print "Error exec'ing ioproxyd";
+	fork_exec(\@forkargs) || die "Error exec'ing ioproxyd";
 
 	sleep(5);
 	$ofh = select($in_fh);

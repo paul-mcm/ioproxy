@@ -1,4 +1,4 @@
-package FORK;
+package Fork;
 use strict;
 use warnings;
 use Exporter;
@@ -16,11 +16,12 @@ sub fork_exec
  	my $pid; 
 
 	$pid = fork;
+
 	if ($pid == 0) {
 	    exec($prog, $flag, @$args) || die "exec failed: $!\n";
-	} else {
-	    return 1;
 	}
+
+	return $pid;  #PID of child or undefined
 }
 
 1;

@@ -4,7 +4,7 @@ use warnings;
 use Exporter;
 
 use File::Temp qw(tempfile);
-use FORK;
+use Fork;
 
 our @ISA        = qw(Exporter);
 our @EXPORT     = qw(file_test);
@@ -50,7 +50,7 @@ sub file_test
 	push @forkargs, $IOPROXY;
         push @forkargs, "-f";
         push @forkargs, $cfg_file;
-	fork_exec(\@forkargs) || print "Error exec'ing ioproxyd";
+	fork_exec(\@forkargs) || die "Error exec'ing ioproxyd";
 
 	sleep(3);
 	if (do_io()) {
